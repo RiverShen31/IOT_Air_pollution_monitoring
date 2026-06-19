@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "author": "IoT Air Pollution Monitoring - Architecture & Security project",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp32", "top": 0, "left": -50, "attrs": {} },
+    { "type": "wokwi-potentiometer", "id": "pot_mq135", "top": -120, "left": 200, "attrs": { "value": "30" } },
+    { "type": "wokwi-potentiometer", "id": "pot_mq7", "top": -120, "left": 320, "attrs": { "value": "10" } },
+    { "type": "wokwi-potentiometer", "id": "pot_dust", "top": -120, "left": 440, "attrs": { "value": "20" } },
+    { "type": "wokwi-dht22", "id": "dht22", "top": 60, "left": 380, "attrs": {} },
+    { "type": "wokwi-led", "id": "alert_led", "top": 180, "left": 380, "attrs": { "color": "red" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 200, "left": 420, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp32:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp32:RX0", "$serialMonitor:TX", "", [] ],
+
+    [ "pot_mq135:VCC", "esp32:3V3", "red", [ "v0" ] ],
+    [ "pot_mq135:GND", "esp32:GND.1", "black", [ "v0" ] ],
+    [ "pot_mq135:SIG", "esp32:D34", "green", [ "v0" ] ],
+
+    [ "pot_mq7:VCC", "esp32:3V3", "red", [ "v0" ] ],
+    [ "pot_mq7:GND", "esp32:GND.1", "black", [ "v0" ] ],
+    [ "pot_mq7:SIG", "esp32:D35", "yellow", [ "v0" ] ],
+
+    [ "pot_dust:VCC", "esp32:3V3", "red", [ "v0" ] ],
+    [ "pot_dust:GND", "esp32:GND.1", "black", [ "v0" ] ],
+    [ "pot_dust:SIG", "esp32:D32", "orange", [ "v0" ] ],
+
+    [ "dht22:VCC", "esp32:3V3", "red", [ "v0" ] ],
+    [ "dht22:GND", "esp32:GND.2", "black", [ "v0" ] ],
+    [ "dht22:SDA", "esp32:D15", "blue", [ "v0" ] ],
+
+    [ "esp32:D2", "r1:1", "red", [ "v0" ] ],
+    [ "r1:2", "alert_led:A", "red", [ "v0" ] ],
+    [ "alert_led:C", "esp32:GND.3", "black", [ "v0" ] ]
+  ]
+}

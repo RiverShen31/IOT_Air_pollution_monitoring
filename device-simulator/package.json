@@ -1,0 +1,14 @@
+{
+  "name": "device-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Giả lập thiết bị IoT (MQ135, MQ7, PM2.5, DHT11) publish dữ liệu qua MQTT",
+  "type": "module",
+  "scripts": {
+    "start": "node simulate.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mqtt": "^5.10.1"
+  }
+}
