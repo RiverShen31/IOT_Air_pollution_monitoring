@@ -6,3 +6,4 @@ mosquitto/log/
 mosquitto/config/password_file
 *.log
 .DS_Store
+memory/

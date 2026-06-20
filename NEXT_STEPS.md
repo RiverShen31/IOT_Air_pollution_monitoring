@@ -5,62 +5,70 @@ thể tiếp tục ngay, không cần làm lại từ đầu. **Không chứa se
 string nằm trong các file `.env` cục bộ, không commit lên git) — chỉ ghi việc gì đã xong, việc
 gì còn thiếu, và lệnh cần chạy tiếp.
 
+## Các trang quản lý (URL, không phải secret)
+
+| Thành phần | Nơi quản lý | URL |
+|---|---|---|
+| Backend (API + MQTT subscriber + WebSocket) | Render dashboard | https://dashboard.render.com/web/srv-d8qv8pvavr4c73dsgts0 |
+| Backend — URL public đang chạy | Render | https://iot-air-pollution-monitoring.onrender.com (health check: `/health`) |
+| Frontend (web dashboard) | Vercel dashboard | https://vercel.com/dashboard |
+| Frontend — URL public đang chạy | Vercel | https://iot-air-pollution-monitoring.vercel.app |
+| Database | MongoDB Atlas | https://cloud.mongodb.com (cluster `cluster0.fqwfzcd.mongodb.net`, db `air_pollution_iot`) |
+| MQTT broker (credentials + quyền topic) | HiveMQ Cloud console | https://console.hivemq.cloud/clusters/7907f0b393c042ee8addaaade1bbfb52/access-management |
+| Source code | GitHub | https://github.com/RiverShen31/IOT_Air_pollution_monitoring |
+
+Mật khẩu/connection string thật của từng dịch vụ nằm trong `backend/.env` và
+`device-simulator/.env` cục bộ (không commit) — không lặp lại ở đây.
+
 ## Đã xong
 
-- [x] Code toàn bộ hệ thống (backend, web, device-simulator, wokwi, docs) — đã push lên
-      `https://github.com/RiverShen31/IOT_Air_pollution_monitoring` (branch `main`).
-- [x] **MongoDB Atlas**: cluster M0 free đã tạo, user `Rivershen`, Network Access đã mở
-      `0.0.0.0/0`. Connection string đã lưu trong `backend/.env` (`MONGO_URI`).
+- [x] Code toàn bộ hệ thống (backend, web, device-simulator, wokwi, docs) — đã push lên GitHub
+      (branch `main`), kèm `package-lock.json` cho cả 3 subproject (backend/web/device-simulator)
+      để build trên Render/Vercel reproducible.
+- [x] **MongoDB Atlas**: cluster M0 free, user `Rivershen`, Network Access `0.0.0.0/0`.
 - [x] **HiveMQ Cloud**: cluster `7907f0b393c042ee8addaaade1bbfb52.s1.eu.hivemq.cloud` (port
-      `8883`, TLS) đã chạy. 2 credential đã tạo:
-      - `backend` — quyền **Subscribe only** trên `devices/#`
-      - `AQ-DEVICE-01` — quyền **Publish only** trên `devices/AQ-DEVICE-01/#`
-      Giá trị thật đã lưu trong `backend/.env` (`MQTT_URL`/`MQTT_USERNAME`/`MQTT_PASSWORD`) và
-      `device-simulator/.env`.
-- [x] `backend/.env` — đã tạo đầy đủ (Mongo + HiveMQ + JWT secrets tự sinh).
-- [x] `web/.env` — đã tạo (`VITE_API_URL=http://localhost:4000`).
-- [x] `device-simulator/.env` — đã tạo (trỏ vào HiveMQ Cloud, deviceId `AQ-DEVICE-01`).
-- [x] `npm install` đã chạy xong cho `backend/` (có `node_modules` + `package-lock.json` đã commit).
+      `8883`, TLS). Lưu ý quan trọng: ở giao diện free tier hiện tại, mỗi credential chỉ có
+      đúng 1 dropdown Permission (`PUBLISH_ONLY` / `SUBSCRIBE_ONLY` / `PUBLISH_AND_SUBSCRIBE`)
+      áp dụng cho toàn bộ topic — **không có ô nhập topic filter riêng như tài liệu cũ mô tả**,
+      và **không sửa được permission tại chỗ, phải xoá rồi tạo lại credential** (password đổi
+      mỗi lần tạo lại). 2 credential hiện tại:
+      - `backend` — `SUBSCRIBE_ONLY`
+      - `AQ-DEVICE-01` — `PUBLISH_ONLY`
+- [x] `npm install` xong cho cả `backend/`, `web/`, `device-simulator/`.
+- [x] Test local end-to-end thành công: backend (Mongo + MQTT) chạy, web dashboard chạy,
+      device-simulator publish → dữ liệu hiện realtime trên dashboard.
+- [x] **Backend deployed lên Render** — service `iot-air-pollution-monitoring`, live tại
+      https://iot-air-pollution-monitoring.onrender.com, `/health` trả về OK, log xác nhận Mongo +
+      MQTT connect + subscribe thành công.
+- [x] **Web deployed lên Vercel** — live tại https://iot-air-pollution-monitoring.vercel.app,
+      `VITE_API_URL` trỏ đúng về Render.
 
 ## Còn thiếu — làm tiếp theo thứ tự này
 
-1. **Cài dependencies còn lại** (chưa chạy `npm install` cho 2 thư mục này):
-   ```powershell
-   cd web; npm install
-   cd ../device-simulator; npm install
-   ```
+1. **Khoá lại CORS** (`docs/DEPLOYMENT.md` mục "Bước 7"): trên Render → tab Env → sửa
+   `CORS_ORIGIN` từ `*` thành `https://iot-air-pollution-monitoring.vercel.app` (không có `/` ở
+   cuối) → Save Changes (Render tự redeploy).
 
-2. **Chạy thử local để xác minh Atlas + HiveMQ Cloud hoạt động đúng** trước khi deploy thật
-   (mở 3 cửa sổ PowerShell riêng, mỗi cái 1 lệnh, để chạy song song):
-   ```powershell
-   cd backend; npm run dev          # cửa sổ 1 — chờ log "[mongo] connected" và "[mqtt] backend connected to broker"
-   cd web; npm run dev              # cửa sổ 2 — mở http://localhost:5173, đăng ký tài khoản, tạo thiết bị "AQ-DEVICE-01"
-   cd device-simulator; npm start   # cửa sổ 3 — sau khi đã tạo thiết bị ở web thì mới chạy lệnh này
-   ```
-   Nếu Dashboard trên web hiện dữ liệu realtime sau vài giây → mọi thứ đúng, qua bước 3.
+2. **Test end-to-end công khai**: mở URL Vercel trên máy/mạng khác (hoặc nhờ bạn bè) → đăng ký
+   tài khoản mới → tạo lại thiết bị `AQ-DEVICE-01` (vì DB dùng chung Atlas, có thể trùng/khác tuỳ
+   tài khoản) → chạy lại `device-simulator` trên máy local (hoặc Wokwi chế độ B) → xác nhận dữ
+   liệu hiện trên dashboard Vercel.
 
-3. **Deploy Backend lên Render** (`docs/DEPLOYMENT.md` mục "Bước 5"):
-   - render.com → đăng nhập GitHub → New Web Service → chọn repo
-     `RiverShen31/IOT_Air_pollution_monitoring`, root dir `backend`
-   - Copy y nguyên các biến môi trường từ `backend/.env` vào phần Environment Variables trên
-     Render (trừ `PORT`, Render tự cấp). Đặt `CORS_ORIGIN=*` tạm thời.
-   - Lấy URL Render cấp (vd `https://xxxx.onrender.com`), test `/health`.
+3. **(Tuỳ chọn) Giữ Render khỏi ngủ**: gói free Render ngủ sau ~15 phút không có request — dùng
+   [UptimeRobot](https://uptimerobot.com/) (free) ping `https://iot-air-pollution-monitoring.onrender.com/health`
+   mỗi 5 phút nếu muốn bạn bè vào lúc nào cũng có dữ liệu sẵn, không phải chờ cold start 30-50s.
 
-4. **Deploy Web lên Vercel** (`docs/DEPLOYMENT.md` mục "Bước 6"):
-   - vercel.com → đăng nhập GitHub → New Project → chọn repo, Root Directory = `web`
-   - Env var `VITE_API_URL` = URL Render ở bước 3.
-   - Lấy URL Vercel cấp (vd `https://xxxx.vercel.app`).
-
-5. **Khoá lại CORS** (`docs/DEPLOYMENT.md` mục "Bước 7"): quay lại Render, sửa `CORS_ORIGIN`
-   thành đúng URL Vercel ở bước 4, save (Render tự redeploy).
-
-6. **Test end-to-end**: mở URL Vercel trên máy/mạng khác → đăng ký tài khoản mới (vì DB Atlas
-   dùng chung, có thể thấy lại thiết bị/dữ liệu đã tạo ở bước 2 nếu cùng tài khoản) → chạy lại
-   `device-simulator` (hoặc Wokwi chế độ B) → xác nhận dữ liệu hiện trên dashboard từ xa.
+4. **Chia sẻ link cho bạn bè**: gửi `https://iot-air-pollution-monitoring.vercel.app` — mỗi
+   người tự đăng ký tài khoản riêng (hệ thống multi-tenant, dữ liệu thiết bị tách theo
+   `owner`/user, không nhìn thấy thiết bị của nhau).
 
 ## Lưu ý bảo mật đã nhắc trong lúc làm
 
 - Đã đổi mật khẩu GitHub + MongoDB Atlas vì lúc đầu bị trùng nhau.
-- Đã đổi 2 mật khẩu credential HiveMQ Cloud (`backend`, `AQ-DEVICE-01`) vì lúc đầu trùng nhau.
-- Quy tắc chung: **không dùng chung 1 mật khẩu cho 2 dịch vụ/credential khác nhau** — mỗi nơi
-  một mật khẩu ngẫu nhiên riêng.
+- Đã đổi mật khẩu credential HiveMQ Cloud (`backend`, `AQ-DEVICE-01`) nhiều lần trong lúc debug
+  quyền subscribe — quy tắc chung vẫn giữ: **không dùng chung 1 mật khẩu cho 2 dịch
+  vụ/credential khác nhau**, mỗi nơi một mật khẩu ngẫu nhiên riêng.
+- JWT secrets dùng cho Render (production) là cặp secret **riêng**, không trùng với cặp dùng khi
+  chạy local (`backend/.env`) — đúng nguyên tắc không tái sử dụng secret giữa các môi trường.
+- Đã thử nhầm GitHub Pages cho phần web (không khả thi vì cần chạy Node.js backend) — đã tắt,
+  dùng đúng Render (backend) + Vercel (frontend) như tài liệu gốc.
