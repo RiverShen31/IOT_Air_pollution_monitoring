@@ -7,6 +7,7 @@ import {
   updateDevice,
   deleteDevice,
   regenerateApiKey,
+  regenerateHmacSecret,
 } from '../controllers/deviceController.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -29,5 +30,6 @@ router.get('/:id', getDevice);
 router.patch('/:id', updateDevice);
 router.delete('/:id', deleteDevice);
 router.post('/:id/api-key/regenerate', regenerateApiKey);
+router.post('/:id/hmac-secret/regenerate', regenerateHmacSecret);
 
 export default router;

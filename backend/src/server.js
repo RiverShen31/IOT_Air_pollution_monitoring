@@ -8,6 +8,7 @@ import { connectDB } from './config/db.js';
 import { connectMqtt } from './config/mqtt.js';
 import { initSocket } from './socket.js';
 import { startMqttIngestService } from './services/mqttIngestService.js';
+import { startDeviceStaleCheckService } from './services/deviceStaleCheckService.js';
 
 import authRoutes from './routes/authRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
@@ -45,6 +46,7 @@ async function main() {
 
   const mqttClient = connectMqtt();
   startMqttIngestService(mqttClient, io);
+  startDeviceStaleCheckService(io);
 
   const port = process.env.PORT || 4000;
   httpServer.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));

@@ -15,6 +15,7 @@
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
+#include <mbedtls/md.h> // HMAC-SHA256, đã có sẵn trong ESP32 core (dùng nội bộ bởi WiFiClientSecure)
 
 // ================== CẤU HÌNH ==================
 
@@ -37,6 +38,11 @@ const char *MQTT_USER = "";                   // Chế độ B: điền mqttUser
 const char *MQTT_PASS = "";                   // Chế độ B: điền mqttPassword của thiết bị (HiveMQ credential)
 
 const char *DEVICE_ID = "AQ-DEVICE-WOKWI-01"; // Phải khớp deviceId đã tạo qua API backend (chế độ B)
+
+// Tuỳ chọn (chế độ B): điền hmacSecret trả về từ response.provisioning.hmacSecret của
+// POST /api/devices để bật ký HMAC-SHA256 cho payload — backend verify chống giả mạo dữ liệu
+// (xem isValidSignature trong backend/src/services/mqttIngestService.js). Để trống = không ký.
+const char *DEVICE_HMAC_SECRET = "";
 
 #define DHTPIN 15
 #define DHTTYPE DHT22
@@ -120,6 +126,23 @@ float readPM25() {
   return (raw / 4095.0f) * 300.0f; // 0-300 ug/m3
 }
 
+// Ký HMAC-SHA256 chuỗi canonical, ghi ra outHex dạng hex 64 ký tự (khớp
+// crypto.createHmac('sha256', key).update(canonical).digest('hex') phía backend Node.js).
+void hmacSha256Hex(const char *key, const char *msg, char *outHex) {
+  unsigned char hmacResult[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char *)key, strlen(key));
+  mbedtls_md_hmac_update(&ctx, (const unsigned char *)msg, strlen(msg));
+  mbedtls_md_hmac_finish(&ctx, hmacResult);
+  mbedtls_md_free(&ctx);
+  for (int i = 0; i < 32; i++) {
+    sprintf(outHex + i * 2, "%02x", hmacResult[i]);
+  }
+  outHex[64] = '\0';
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(ALERT_LED, OUTPUT);
@@ -152,15 +175,29 @@ void loop() {
       temperature = 0;
     }
 
-    StaticJsonDocument<256> doc;
-    doc["ts"] = (uint32_t)(millis() / 1000); // backend chấp nhận epoch giây hoặc ISO string
+    uint32_t tsEpoch = (uint32_t)(millis() / 1000); // backend chấp nhận epoch giây hoặc ISO string
+
+    StaticJsonDocument<512> doc;
+    doc["ts"] = tsEpoch;
     doc["co2_ppm"] = co2;
     doc["co_ppm"] = co;
     doc["pm25_ugm3"] = pm25;
     doc["temperature_c"] = temperature;
     doc["humidity_pct"] = humidity;
 
-    char payload[256];
+    if (strlen(DEVICE_HMAC_SECRET) > 0) {
+      // Chuỗi canonical phải khớp chính xác buildCanonicalString() trong
+      // backend/src/services/mqttIngestService.js: deviceId|ts|co2|co|pm25|temp|humidity,
+      // mỗi số làm tròn 1 chữ số thập phân (%.1f khớp JS .toFixed(1)).
+      char canonical[200];
+      snprintf(canonical, sizeof(canonical), "%s|%lu|%.1f|%.1f|%.1f|%.1f|%.1f",
+               DEVICE_ID, (unsigned long)tsEpoch, co2, co, pm25, temperature, humidity);
+      char sigHex[65];
+      hmacSha256Hex(DEVICE_HMAC_SECRET, canonical, sigHex);
+      doc["sig"] = sigHex;
+    }
+
+    char payload[512];
     size_t len = serializeJson(doc, payload);
     mqtt.publish(telemetryTopic, payload, len);
 

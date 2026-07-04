@@ -5,6 +5,8 @@
 
 import 'dotenv/config';
 import mqtt from 'mqtt';
+import crypto from 'crypto';
+import http from 'http';
 
 const MQTT_HOST = process.env.MQTT_HOST || 'mqtt://localhost:1883';
 const DEVICE_ID = process.env.DEVICE_ID || 'AQ-DEVICE-01';
@@ -12,6 +14,13 @@ const MQTT_USERNAME = process.env.MQTT_USERNAME || DEVICE_ID;
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || '';
 const PUBLISH_INTERVAL_MS = Number(process.env.PUBLISH_INTERVAL_MS || 5000);
 const SCENARIO = process.env.SCENARIO || 'normal';
+// Nếu set (copy từ hmacSecret trả về lúc POST /api/devices), reading sẽ được ký HMAC-SHA256 để
+// backend verify chống giả mạo payload — xem isValidSignature trong mqttIngestService.js.
+const DEVICE_HMAC_SECRET = process.env.DEVICE_HMAC_SECRET || '';
+// Chỉ cần khi deploy lên Render dưới dạng Web Service (free tier không có Background Worker) —
+// health server thuần http, không phụ thuộc trạng thái MQTT, chỉ để thoả điều kiện Render coi
+// đây là "còn sống". Xem render.yaml + docs/DEPLOYMENT.md.
+const PORT = process.env.PORT || 3000;
 
 const TELEMETRY_TOPIC = `devices/${DEVICE_ID}/telemetry`;
 const STATUS_TOPIC = `devices/${DEVICE_ID}/status`;
@@ -44,6 +53,22 @@ function randomWalk(value, step, min, max) {
   return clamp(value + delta, min, max);
 }
 
+// Chuỗi cố định thứ tự để ký HMAC — phải khớp chính xác buildCanonicalString() trong
+// backend/src/services/mqttIngestService.js (cùng .toFixed(1) để tránh lệch định dạng số).
+function signReading(reading) {
+  const round1 = (n) => Number(n).toFixed(1);
+  const canonical = [
+    DEVICE_ID,
+    reading.ts,
+    round1(reading.co2_ppm),
+    round1(reading.co_ppm),
+    round1(reading.pm25_ugm3),
+    round1(reading.temperature_c),
+    round1(reading.humidity_pct),
+  ].join('|');
+  return crypto.createHmac('sha256', DEVICE_HMAC_SECRET).update(canonical).digest('hex');
+}
+
 function nextReading() {
   state = {
     co2_ppm: Math.round(randomWalk(state.co2_ppm, 40, 350, 5000)),
@@ -52,7 +77,9 @@ function nextReading() {
     temperature_c: Number(randomWalk(state.temperature_c, 0.3, 15, 45).toFixed(1)),
     humidity_pct: Number(randomWalk(state.humidity_pct, 1.5, 20, 95).toFixed(1)),
   };
-  return { ts: new Date().toISOString(), ...state };
+  const reading = { ts: new Date().toISOString(), ...state };
+  if (DEVICE_HMAC_SECRET) reading.sig = signReading(reading);
+  return reading;
 }
 
 console.log(`[${DEVICE_ID}] Connecting to ${MQTT_HOST} (scenario=${SCENARIO}) ...`);
@@ -69,6 +96,13 @@ const client = mqtt.connect(MQTT_HOST, {
   },
   reconnectPeriod: 3000,
 });
+
+http
+  .createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ status: 'ok', deviceId: DEVICE_ID, mqttConnected: client.connected }));
+  })
+  .listen(PORT, () => console.log(`[${DEVICE_ID}] health server on :${PORT}`));
 
 let timer = null;
 

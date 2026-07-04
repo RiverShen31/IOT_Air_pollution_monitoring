@@ -5,6 +5,7 @@ import Register from './pages/Register.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Devices from './pages/Devices.jsx';
 import History from './pages/History.jsx';
+import Compare from './pages/Compare.jsx';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ function NavBar() {
         <Link to="/">Dashboard</Link>
         <Link to="/devices">Thiết bị</Link>
         <Link to="/history">Lịch sử</Link>
+        <Link to="/compare">So sánh</Link>
       </div>
       <div className="navbar-user">
         <span>{user.name} ({user.role})</span>
@@ -69,6 +71,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <History />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/compare"
+            element={
+              <ProtectedRoute>
+                <Compare />
               </ProtectedRoute>
             }
           />

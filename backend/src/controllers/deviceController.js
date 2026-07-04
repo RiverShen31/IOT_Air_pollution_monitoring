@@ -26,6 +26,7 @@ export async function createDevice(req, res) {
     location,
     owner: req.user.id,
     apiKey: Device.generateApiKey(),
+    hmacSecret: Device.generateHmacSecret(),
     mqttUsername: deviceId,
   });
 
@@ -34,8 +35,11 @@ export async function createDevice(req, res) {
     provisioning: {
       note:
         'Đăng ký thiết bị này trên MQTT broker bằng lệnh sau, rồi cấu hình device-simulator hoặc ' +
-        'wokwi/sketch.ino với cùng deviceId + mqttPassword:',
+        'wokwi/sketch.ino với cùng deviceId + mqttPassword. Nếu muốn bật ký HMAC chống giả mạo ' +
+        'payload, copy hmacSecret bên dưới vào biến DEVICE_HMAC_SECRET (device-simulator/.env) ' +
+        'hoặc DEVICE_HMAC_SECRET trong wokwi/sketch.ino:',
       command: `bash mosquitto/config/add-device.sh ${deviceId} <mqttPassword tự chọn>`,
+      hmacSecret: device.hmacSecret,
     },
   });
 }
@@ -79,6 +83,15 @@ export async function regenerateApiKey(req, res) {
   if (!device) return res.status(404).json({ error: 'Device not found' });
 
   device.apiKey = Device.generateApiKey();
+  await device.save();
+  res.json({ device });
+}
+
+export async function regenerateHmacSecret(req, res) {
+  const device = await Device.findOne({ _id: req.params.id, owner: req.user.id });
+  if (!device) return res.status(404).json({ error: 'Device not found' });
+
+  device.hmacSecret = Device.generateHmacSecret();
   await device.save();
   res.json({ device });
 }

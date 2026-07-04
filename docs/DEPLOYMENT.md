@@ -194,6 +194,45 @@ thiết kế CORS trong `docs/SECURITY.md`.
 3. Hoặc dùng Wokwi (xem `wokwi/README.md`, chế độ B) — sửa `MQTT_HOST`/`MQTT_PORT`/`MQTT_USER`/
    `MQTT_PASS` trong `sketch.ino` trỏ thẳng vào HiveMQ Cloud (không cần ngrok vì broker đã public).
 
+## Bước 9 — Deploy `device-simulator` như service 24/7 (khắc phục "mất dữ liệu khi tắt máy")
+
+`device-simulator` mặc định chỉ là 1 script chạy tay trên máy local — hễ đóng terminal/tắt máy
+thì hết dữ liệu telemetry mới, dù backend/broker/DB vẫn "sống" bình thường (xem sự cố ghi trong
+`NEXT_STEPS.md` ngày 04/07/2026). Cách xử lý gốc rễ: deploy nó như 1 Render Web Service riêng,
+y hệt Bước 5 nhưng trỏ vào thư mục `device-simulator` (Render free tier không có Background
+Worker miễn phí, nên dùng Web Service — `simulate.js` đã tự mở 1 HTTP health server để Render
+coi service là "healthy").
+
+1. Render dashboard → **New** → **Web Service** → chọn cùng repo.
+2. Điền cấu hình:
+   - **Root Directory**: `device-simulator`
+   - **Runtime**: Node
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Instance Type**: Free
+3. Mục **Environment Variables** (copy giá trị từ `device-simulator/.env` cục bộ đang chạy tốt):
+   | Key | Value |
+   |---|---|
+   | `MQTT_HOST` | `mqtts://xxxxxxxx.s1.eu.hivemq.cloud:8883` |
+   | `DEVICE_ID` | `AQ-DEVICE-01` |
+   | `MQTT_USERNAME` | `AQ-DEVICE-01` |
+   | `MQTT_PASSWORD` | password credential `AQ-DEVICE-01` |
+   | `DEVICE_HMAC_SECRET` | để trống trừ khi đã bật ký HMAC cho device này |
+   | `PUBLISH_INTERVAL_MS` | `5000` |
+   | `SCENARIO` | `normal` |
+4. **Create Web Service** → đợi build xong → Render cấp URL dạng
+   `https://<tên-service>.onrender.com`. Mở `/health` để xác nhận `{"status":"ok"}`.
+5. Thêm URL này vào UptimeRobot (cùng monitor với backend ở Bước 5) — nếu không, service cũng
+   ngủ sau ~15 phút idle và telemetry lại ngừng chảy, quay lại đúng vấn đề ban đầu.
+6. Có thể tắt hẳn tiến trình `npm start` chạy tay trên máy local sau khi xác nhận service trên
+   Render đã publish thành công (tránh 2 nguồn cùng publish trùng `DEVICE_ID` gây dữ liệu double).
+
+`render.yaml` ở gốc repo đã có sẵn cấu hình service này (`air-pollution-device-simulator`) — nếu
+muốn dùng **New > Blueprint** thay vì điền tay, Render sẽ đọc file này, nhưng vẫn cần điền tay
+các giá trị `sync: false` sau khi tạo. Lưu ý: service backend hiện tại (`iot-air-pollution-monitoring`)
+được tạo thủ công chứ không qua Blueprint, nên tên service có thể khác tên khai báo trong
+`render.yaml` — không sao, tên chỉ ảnh hưởng URL, không ảnh hưởng chức năng.
+
 ## Tổng hợp giới hạn gói free (tham khảo khi báo cáo)
 
 | Dịch vụ | Giới hạn free tier đáng chú ý |

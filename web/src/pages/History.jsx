@@ -22,6 +22,18 @@ export default function History() {
     });
   }, [deviceId, limit]);
 
+  async function handleExportCsv() {
+    const { data } = await api.get(`/readings/${deviceId}/history/export?limit=${limit}`, {
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${deviceId}-history.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div>
       <h1>Lịch sử dữ liệu</h1>
@@ -45,6 +57,9 @@ export default function History() {
             <option value={500}>500</option>
           </select>
         </label>
+        <button type="button" onClick={handleExportCsv} disabled={!deviceId}>
+          Xuất CSV
+        </button>
       </div>
 
       {readings.length > 0 ? (

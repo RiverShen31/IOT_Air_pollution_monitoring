@@ -25,6 +25,8 @@ trí trong source để tiện đối chiếu khi báo cáo / vấn đáp.
 | MQTT Authorization (ACL) | File `acl.conf`: device chỉ `publish` được vào đúng topic `devices/{deviceId}/#` của chính nó; backend có quyền đọc toàn bộ `devices/#` | `mosquitto/config/acl.conf` |
 | WebSocket Authentication | Socket.IO middleware xác thực JWT ngay khi handshake (`io.use`), từ chối kết nối nếu token không hợp lệ; client chỉ join được room `user:{userId}` của chính mình | `backend/src/socket.js` |
 | CORS | Chỉ cho phép origin của web app (`CORS_ORIGIN` trong `.env`), chặn các origin khác gọi API | `backend/src/server.js` |
+| Toàn vẹn payload (HMAC-SHA256) | Mỗi `Device` có `hmacSecret` riêng (32 byte ngẫu nhiên, tách biệt khỏi `apiKey` để không trộn vai trò bearer-credential và signing-key); thiết bị ký 1 chuỗi canonical cố định thứ tự (`deviceId\|ts\|co2\|co\|pm25\|temp\|humidity`), backend verify bằng `crypto.timingSafeEqual` trước khi ingest — chống giả mạo dữ liệu ngay cả khi kẻ tấn công publish được vào đúng topic MQTT của thiết bị (vd ACL bị cấu hình sai). Thiết bị chưa có `hmacSecret` vẫn được chấp nhận (soft-accept, chỉ log warn) để không phá vỡ thiết bị đang chạy — rollout dần dần, chưa bắt buộc 100% | `backend/src/services/mqttIngestService.js` (`isValidSignature`, `buildCanonicalString`), `device-simulator/simulate.js`, `wokwi/sketch.ino` (`mbedtls/md.h`) |
+| Chống replay attack | Mỗi reading phải có `ts` nằm trong cửa sổ ±5 phút so với giờ server VÀ mới hơn `Device.lastReadingTs` (bản ghi gần nhất đã chấp nhận của thiết bị đó) — từ chối gửi lại 1 payload đã capture trước đó | `backend/src/services/mqttIngestService.js` (`ingestTelemetry`) |
 
 ## 3. Các cơ chế bảo mật khác trong hệ thống
 
@@ -50,8 +52,10 @@ trí trong source để tiện đối chiếu khi báo cáo / vấn đáp.
   `device-simulator/simulate.js` (qua thư viện `mqtt.js`, tự nhận diện scheme `mqtts://`) và
   `wokwi/sketch.ino` (chuyển sang `WiFiClientSecure` khi `MQTT_PORT == 8883`) đều đã hỗ trợ sẵn,
   không cần sửa code.
-- **Secret rotation**: JWT secret/API key hiện tạo 1 lần thủ công, production nên có cơ chế xoay
-  vòng định kỳ.
+- **Secret rotation**: JWT secret hiện tạo 1 lần thủ công, production nên có cơ chế xoay vòng
+  định kỳ. `apiKey` và `hmacSecret` đã có endpoint tự regenerate theo yêu cầu
+  (`POST /api/devices/:id/api-key/regenerate`, `POST /api/devices/:id/hmac-secret/regenerate`)
+  nhưng vẫn là thao tác thủ công, chưa có lịch tự động xoay vòng.
 - **2FA**: chưa triển khai xác thực 2 lớp cho user, có thể bổ sung (TOTP) như hướng phát triển.
 - **Lưu token ở client**: web app hiện lưu access/refresh token trong `localStorage`
   (`web/src/api/client.js`) để đơn giản hoá demo. Nhược điểm: dễ bị đánh cắp qua XSS. Production
