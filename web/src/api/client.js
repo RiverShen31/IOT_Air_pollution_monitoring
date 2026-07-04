@@ -2,61 +2,42 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-export const api = axios.create({ baseURL: `${API_URL}/api` });
+// Token nằm trong cookie httpOnly do backend set (xem authController.js) — JS phía client
+// không đọc/ghi được, browser tự đính kèm cookie vào mỗi request nhờ withCredentials: true.
+// Giảm rủi ro bị đánh cắp qua XSS so với lưu trong localStorage trước đây.
+export const api = axios.create({ baseURL: `${API_URL}/api`, withCredentials: true });
 
-function getAccessToken() {
-  return localStorage.getItem('accessToken');
+let onAuthFailure = null;
+export function setOnAuthFailure(fn) {
+  onAuthFailure = fn;
 }
 
-function getRefreshToken() {
-  return localStorage.getItem('refreshToken');
-}
-
-export function setTokens({ accessToken, refreshToken }) {
-  if (accessToken) localStorage.setItem('accessToken', accessToken);
-  if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
-}
-
-export function clearTokens() {
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
-}
-
-api.interceptors.request.use((config) => {
-  const token = getAccessToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-// Access token hết hạn sau 15' -> tự động dùng refresh token để lấy cặp token mới
-// (refresh token rotation: mỗi lần refresh, token cũ bị thu hồi ở backend).
+// Access token cookie hết hạn sau 15' -> tự động gọi /auth/refresh (cookie refreshToken được
+// gửi kèm tự động) để backend cấp lại cặp cookie mới, rồi retry request gốc.
 let refreshPromise = null;
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry && getRefreshToken()) {
+    const isAuthEndpoint = original?.url?.startsWith('/auth/');
+    if (error.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       original._retry = true;
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post(`${API_URL}/api/auth/refresh`, { refreshToken: getRefreshToken() })
+            .post(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true })
             .finally(() => {
               refreshPromise = null;
             });
         }
-        const { data } = await refreshPromise;
-        setTokens(data);
-        original.headers.Authorization = `Bearer ${data.accessToken}`;
+        await refreshPromise;
         return api(original);
-      } catch {
-        clearTokens();
-        window.location.href = '/login';
+      } catch (refreshErr) {
+        onAuthFailure?.();
+        return Promise.reject(refreshErr);
       }
     }
     return Promise.reject(error);
   }
 );
-
-export { getAccessToken, getRefreshToken };

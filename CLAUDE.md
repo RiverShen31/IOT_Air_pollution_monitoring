@@ -123,7 +123,9 @@ prevented at the socket layer, not just by query filtering.
 Three independent auth mechanisms, used in different places — don't conflate them:
 - **User auth**: JWT access token (15m) + DB-backed refresh token (`RefreshToken` model stores a
   hash, not the raw token, so sessions are individually revocable) with rotation on every
-  `/api/auth/refresh` call. `requireAuth` middleware reads `Authorization: Bearer`.
+  `/api/auth/refresh` call. Both tokens are set as `httpOnly; Secure; SameSite=None` cookies by
+  `authController.js` (not returned in the response body, not read via `Authorization` header) —
+  `requireAuth` middleware reads `req.cookies.accessToken`.
 - **Device HTTP auth**: per-device `apiKey` (random 32 bytes) via `x-api-key` header,
   checked by `requireApiKey` middleware — only used by the `/api/ingest` fallback route.
 - **Device MQTT auth**: separate username/password — either in `mosquitto/config/password_file` +
@@ -147,18 +149,22 @@ index on `expiresAt`.
 
 ### Frontend realtime wiring
 
-`web/src/api/client.js` is the only place that should read/write tokens (`localStorage`) or
-handle 401 → refresh-and-retry; it auto-rotates tokens via a shared in-flight `refreshPromise` to
-avoid duplicate refresh calls on concurrent 401s. `web/src/pages/Dashboard.jsx` opens a Socket.IO
-connection authenticated with the current access token (`auth: { token }`) and listens for
+`web/src/api/client.js` is the only place that should handle 401 → refresh-and-retry; tokens live
+in httpOnly cookies set by the backend, so the frontend never reads/writes them directly (axios
+instance uses `withCredentials: true` instead of an `Authorization` header). It auto-rotates
+tokens via a shared in-flight `refreshPromise` to avoid duplicate refresh calls on concurrent
+401s, and exposes `setOnAuthFailure` so `AuthContext.jsx` can clear `user` state (triggering
+`ProtectedRoute`'s redirect) when a refresh ultimately fails, instead of a hard page reload.
+`web/src/pages/Dashboard.jsx` opens a Socket.IO connection with `withCredentials: true` (backend
+reads the `accessToken` cookie from the handshake, see `socket.js`) and listens for
 `reading:new` / `alert:new` / `device:status` — if you add a new realtime event on the backend,
 emit it to the `user:{ownerId}` room and add a corresponding listener here.
 
 ### Known non-production gaps (documented intentionally, not oversights)
 
-Per `docs/SECURITY.md`: no secret rotation, no 2FA, tokens in `localStorage` instead of httpOnly
-cookies. Don't "fix" these silently — they're called out as deliberate scope boundaries for the
-assignment's simulation stage. (TLS is *not* a gap when using the cloud path — Render/Vercel
+Per `docs/SECURITY.md`: no secret rotation, no 2FA. Don't "fix" these silently — they're called
+out as deliberate scope boundaries for the assignment's simulation stage. (TLS is *not* a gap
+when using the cloud path — Render/Vercel
 terminate HTTPS automatically and HiveMQ Cloud requires `mqtts://` on port 8883; both `mqtt.js`
 in the backend/simulator and the `WiFiClientSecure` branch in `wokwi/sketch.ino` already support
 it. TLS is only absent on the local-Docker path, which uses plain `mqtt://`/`http://` by design

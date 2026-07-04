@@ -6,10 +6,36 @@ import {
   generateRefreshTokenValue,
   hashToken,
   refreshExpiryDate,
+  accessTokenCookieMaxAgeMs,
+  refreshTokenCookieMaxAgeMs,
 } from '../utils/jwt.js';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
+
+// httpOnly: JS phía client không đọc được (chống đánh cắp qua XSS, khác localStorage trước đây).
+// secure + sameSite:'none': bắt buộc để cookie được gửi cross-site giữa Vercel (web) và Render
+// (backend) — Chrome/Firefox coi http://localhost là secure context nên vẫn hoạt động khi chạy
+// local (xem docs/DEPLOYMENT.md).
+const COOKIE_BASE = { httpOnly: true, secure: true, sameSite: 'none' };
+
+function setAuthCookies(res, tokens) {
+  res.cookie('accessToken', tokens.accessToken, {
+    ...COOKIE_BASE,
+    path: '/',
+    maxAge: accessTokenCookieMaxAgeMs(),
+  });
+  res.cookie('refreshToken', tokens.refreshToken, {
+    ...COOKIE_BASE,
+    path: '/api/auth',
+    maxAge: refreshTokenCookieMaxAgeMs(),
+  });
+}
+
+function clearAuthCookies(res) {
+  res.clearCookie('accessToken', { ...COOKIE_BASE, path: '/' });
+  res.clearCookie('refreshToken', { ...COOKIE_BASE, path: '/api/auth' });
+}
 
 function checkValidation(req, res) {
   const errors = validationResult(req);
@@ -45,7 +71,8 @@ export async function register(req, res) {
   await user.save();
 
   const tokens = await issueTokenPair(user);
-  res.status(201).json({ user: user.toSafeJSON(), ...tokens });
+  setAuthCookies(res, tokens);
+  res.status(201).json({ user: user.toSafeJSON() });
 }
 
 export async function login(req, res) {
@@ -77,24 +104,27 @@ export async function login(req, res) {
   await user.save();
 
   const tokens = await issueTokenPair(user);
-  res.json({ user: user.toSafeJSON(), ...tokens });
+  setAuthCookies(res, tokens);
+  res.json({ user: user.toSafeJSON() });
 }
 
 export async function refresh(req, res) {
-  const { refreshToken } = req.body;
+  const refreshToken = req.cookies?.refreshToken;
   if (!refreshToken) {
-    return res.status(400).json({ error: 'refreshToken is required' });
+    return res.status(401).json({ error: 'Missing refresh token cookie' });
   }
 
   const tokenHash = hashToken(refreshToken);
   const stored = await RefreshToken.findOne({ tokenHash });
 
   if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    clearAuthCookies(res);
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 
   const user = await User.findById(stored.user);
   if (!user) {
+    clearAuthCookies(res);
     return res.status(401).json({ error: 'User not found' });
   }
 
@@ -103,17 +133,19 @@ export async function refresh(req, res) {
   await stored.save();
 
   const tokens = await issueTokenPair(user);
-  res.json({ user: user.toSafeJSON(), ...tokens });
+  setAuthCookies(res, tokens);
+  res.json({ user: user.toSafeJSON() });
 }
 
 export async function logout(req, res) {
-  const { refreshToken } = req.body;
+  const refreshToken = req.cookies?.refreshToken;
   if (refreshToken) {
     await RefreshToken.updateOne(
       { tokenHash: hashToken(refreshToken) },
       { $set: { revokedAt: new Date() } }
     );
   }
+  clearAuthCookies(res);
   res.status(204).end();
 }
 

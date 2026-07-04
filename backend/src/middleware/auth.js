@@ -1,13 +1,13 @@
 import { verifyAccessToken } from '../utils/jwt.js';
 import Device from '../models/Device.js';
 
-// Xác thực người dùng qua JWT Bearer access token
+// Xác thực người dùng qua JWT access token — đọc từ cookie httpOnly (set bởi authController),
+// không còn nhận qua header Authorization/localStorage để giảm rủi ro bị đánh cắp qua XSS.
 export function requireAuth(req, res, next) {
-  const header = req.headers.authorization || '';
-  const [scheme, token] = header.split(' ');
+  const token = req.cookies?.accessToken;
 
-  if (scheme !== 'Bearer' || !token) {
-    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  if (!token) {
+    return res.status(401).json({ error: 'Missing access token cookie' });
   }
 
   try {

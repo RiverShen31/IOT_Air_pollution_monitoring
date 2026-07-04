@@ -7,6 +7,8 @@ export default function History() {
   const [deviceId, setDeviceId] = useState('');
   const [readings, setReadings] = useState([]);
   const [limit, setLimit] = useState(100);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   useEffect(() => {
     api.get('/devices').then(({ data }) => {
@@ -15,15 +17,22 @@ export default function History() {
     });
   }, []);
 
+  function buildRangeParams() {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (fromDate) params.set('from', new Date(fromDate).toISOString());
+    if (toDate) params.set('to', new Date(toDate).toISOString());
+    return params;
+  }
+
   useEffect(() => {
     if (!deviceId) return;
-    api.get(`/readings/${deviceId}/history?limit=${limit}`).then(({ data }) => {
+    api.get(`/readings/${deviceId}/history?${buildRangeParams()}`).then(({ data }) => {
       setReadings(data.readings);
     });
-  }, [deviceId, limit]);
+  }, [deviceId, limit, fromDate, toDate]);
 
   async function handleExportCsv() {
-    const { data } = await api.get(`/readings/${deviceId}/history/export?limit=${limit}`, {
+    const { data } = await api.get(`/readings/${deviceId}/history/export?${buildRangeParams()}`, {
       responseType: 'blob',
     });
     const url = URL.createObjectURL(data);
@@ -57,6 +66,25 @@ export default function History() {
             <option value={500}>500</option>
           </select>
         </label>
+        <label>
+          Từ ngày:
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        </label>
+        <label>
+          Đến ngày:
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        </label>
+        {(fromDate || toDate) && (
+          <button
+            type="button"
+            onClick={() => {
+              setFromDate('');
+              setToDate('');
+            }}
+          >
+            Xoá bộ lọc ngày
+          </button>
+        )}
         <button type="button" onClick={handleExportCsv} disabled={!deviceId}>
           Xuất CSV
         </button>

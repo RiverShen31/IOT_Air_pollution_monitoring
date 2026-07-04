@@ -25,3 +25,21 @@ export function refreshExpiryDate() {
   const days = Number(process.env.JWT_REFRESH_EXPIRES_DAYS || 7);
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
+
+const DURATION_RE = /^(\d+)(s|m|h|d)$/;
+const UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+
+// Chuyển "15m"/"7d" (định dạng dùng cho JWT_ACCESS_EXPIRES) sang ms, dùng làm maxAge cho cookie.
+function durationToMs(value, fallbackMs) {
+  const match = DURATION_RE.exec(value || '');
+  return match ? Number(match[1]) * UNIT_MS[match[2]] : fallbackMs;
+}
+
+export function accessTokenCookieMaxAgeMs() {
+  return durationToMs(process.env.JWT_ACCESS_EXPIRES, 15 * 60 * 1000);
+}
+
+export function refreshTokenCookieMaxAgeMs() {
+  const days = Number(process.env.JWT_REFRESH_EXPIRES_DAYS || 7);
+  return days * 24 * 60 * 60 * 1000;
+}

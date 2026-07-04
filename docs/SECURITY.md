@@ -19,11 +19,11 @@ trí trong source để tiện đối chiếu khi báo cáo / vấn đáp.
 
 | Kỹ thuật | Mô tả | Vị trí code |
 |---|---|---|
-| JWT Bearer cho REST API | Mọi route `/api/devices`, `/api/readings` yêu cầu header `Authorization: Bearer <accessToken>`, verify bằng middleware | `backend/src/middleware/auth.js` (`requireAuth`) |
+| JWT qua cookie httpOnly | `accessToken`/`refreshToken` được set bởi backend dưới dạng cookie `httpOnly; Secure; SameSite=None` (không phải header `Authorization` hay `localStorage`) — JS phía client không đọc/ghi được, giảm rủi ro bị đánh cắp qua XSS. `SameSite=None` (thay vì `Strict`/`Lax`) là bắt buộc vì web (Vercel) và backend (Render) khác domain nên về bản chất là cross-site; `Secure` yêu cầu HTTPS nhưng trình duyệt coi `http://localhost` là secure context nên vẫn hoạt động khi chạy local. `requireAuth` verify từ `req.cookies.accessToken` | `backend/src/controllers/authController.js` (`setAuthCookies`), `backend/src/middleware/auth.js` (`requireAuth`) |
 | API Key cho thiết bị (HTTP fallback) | Mỗi `Device` có `apiKey` ngẫu nhiên (32 byte, `crypto.randomBytes`) dùng cho việc thiết bị gọi trực tiếp HTTP nếu không qua MQTT | `backend/src/models/Device.js`, `backend/src/middleware/auth.js` (`requireApiKey`) |
 | MQTT Authentication | Mỗi thiết bị có `mqttUsername`/`mqttPassword` riêng, broker xác thực qua `password_file` (mã hoá SHA512 bởi `mosquitto_passwd`) | `mosquitto/config/password_file` |
 | MQTT Authorization (ACL) | File `acl.conf`: device chỉ `publish` được vào đúng topic `devices/{deviceId}/#` của chính nó; backend có quyền đọc toàn bộ `devices/#` | `mosquitto/config/acl.conf` |
-| WebSocket Authentication | Socket.IO middleware xác thực JWT ngay khi handshake (`io.use`), từ chối kết nối nếu token không hợp lệ; client chỉ join được room `user:{userId}` của chính mình | `backend/src/socket.js` |
+| WebSocket Authentication | Socket.IO middleware xác thực JWT ngay khi handshake (`io.use`), đọc `accessToken` từ cookie httpOnly (`socket.handshake.headers.cookie`, parse bằng package `cookie`) — client kết nối với `withCredentials: true`, không tự truyền token qua `auth.token` nữa; từ chối kết nối nếu token không hợp lệ. Client chỉ join được room `user:{userId}` của chính mình | `backend/src/socket.js` |
 | CORS | Chỉ cho phép origin của web app (`CORS_ORIGIN` trong `.env`), chặn các origin khác gọi API | `backend/src/server.js` |
 | Toàn vẹn payload (HMAC-SHA256) | Mỗi `Device` có `hmacSecret` riêng (32 byte ngẫu nhiên, tách biệt khỏi `apiKey` để không trộn vai trò bearer-credential và signing-key); thiết bị ký 1 chuỗi canonical cố định thứ tự (`deviceId\|ts\|co2\|co\|pm25\|temp\|humidity`), backend verify bằng `crypto.timingSafeEqual` trước khi ingest — chống giả mạo dữ liệu ngay cả khi kẻ tấn công publish được vào đúng topic MQTT của thiết bị (vd ACL bị cấu hình sai). Thiết bị chưa có `hmacSecret` vẫn được chấp nhận (soft-accept, chỉ log warn) để không phá vỡ thiết bị đang chạy — rollout dần dần, chưa bắt buộc 100% | `backend/src/services/mqttIngestService.js` (`isValidSignature`, `buildCanonicalString`), `device-simulator/simulate.js`, `wokwi/sketch.ino` (`mbedtls/md.h`) |
 | Chống replay attack | Mỗi reading phải có `ts` nằm trong cửa sổ ±5 phút so với giờ server VÀ mới hơn `Device.lastReadingTs` (bản ghi gần nhất đã chấp nhận của thiết bị đó) — từ chối gửi lại 1 payload đã capture trước đó | `backend/src/services/mqttIngestService.js` (`ingestTelemetry`) |
@@ -57,9 +57,6 @@ trí trong source để tiện đối chiếu khi báo cáo / vấn đáp.
   (`POST /api/devices/:id/api-key/regenerate`, `POST /api/devices/:id/hmac-secret/regenerate`)
   nhưng vẫn là thao tác thủ công, chưa có lịch tự động xoay vòng.
 - **2FA**: chưa triển khai xác thực 2 lớp cho user, có thể bổ sung (TOTP) như hướng phát triển.
-- **Lưu token ở client**: web app hiện lưu access/refresh token trong `localStorage`
-  (`web/src/api/client.js`) để đơn giản hoá demo. Nhược điểm: dễ bị đánh cắp qua XSS. Production
-  nên chuyển sang cookie `httpOnly` + `Secure` + `SameSite=Strict` cho refresh token.
 
 Phần kiến trúc & code đã được thiết kế để các phần này có thể bật thêm mà không cần đổi cấu
 trúc hệ thống (chỉ đổi config/env).

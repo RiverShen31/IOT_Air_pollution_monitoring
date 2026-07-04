@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { api, setTokens, clearTokens, getAccessToken, getRefreshToken } from '../api/client.js';
+import { api, setOnAuthFailure } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
@@ -8,16 +8,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setOnAuthFailure(() => setUser(null));
+  }, []);
+
+  useEffect(() => {
     async function restoreSession() {
-      if (!getAccessToken()) {
-        setLoading(false);
-        return;
-      }
       try {
         const { data } = await api.get('/auth/me');
         setUser(data.user);
       } catch {
-        clearTokens();
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -27,25 +27,22 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    setTokens(data);
     setUser(data.user);
     return data.user;
   }, []);
 
   const register = useCallback(async (name, email, password) => {
     const { data } = await api.post('/auth/register', { name, email, password });
-    setTokens(data);
     setUser(data.user);
     return data.user;
   }, []);
 
   const logout = useCallback(async () => {
     try {
-      await api.post('/auth/logout', { refreshToken: getRefreshToken() });
+      await api.post('/auth/logout');
     } catch {
       // ignore network errors on logout
     }
-    clearTokens();
     setUser(null);
   }, []);
 

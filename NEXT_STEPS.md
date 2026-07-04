@@ -45,9 +45,10 @@ Mật khẩu/connection string thật của từng dịch vụ nằm trong `back
 
 ## Còn thiếu — làm tiếp theo thứ tự này
 
-1. **Khoá lại CORS** (`docs/DEPLOYMENT.md` mục "Bước 7"): trên Render → tab Env → sửa
-   `CORS_ORIGIN` từ `*` thành `https://iot-air-pollution-monitoring.vercel.app` (không có `/` ở
-   cuối) → Save Changes (Render tự redeploy).
+1. ~~Khoá lại CORS~~ — **đã xong**, xác nhận lại bằng `curl` trực tiếp vào backend Render với
+   header `Origin` giả (`https://evil.example.com`) → response trả về cố định
+   `Access-Control-Allow-Origin: https://iot-air-pollution-monitoring.vercel.app`, không phải
+   `*` → `CORS_ORIGIN` trên Render đã được set đúng.
 
 2. **Test end-to-end công khai**: mở URL Vercel trên máy/mạng khác (hoặc nhờ bạn bè) → đăng ký
    tài khoản mới → tạo lại thiết bị `AQ-DEVICE-01` (vì DB dùng chung Atlas, có thể trùng/khác tuỳ
@@ -215,3 +216,52 @@ Từ 04/07/2026: theo yêu cầu của chủ dự án, mọi bước xử lý/th
   **Việc còn cần bạn tự làm**: đăng nhập Render dashboard → làm theo Bước 9 → điền env var từ
   `device-simulator/.env` cục bộ đang chạy tốt → thêm URL mới vào UptimeRobot. Không thể tự động
   hoá bước này vì cần đăng nhập/thao tác trên Render dashboard của bạn.
+- **2026-07-04 (tiếp)** — Kiểm tra lại bằng `curl` trực tiếp (không chỉ đọc doc) xem mục "Khoá lại
+  CORS" trong "Còn thiếu" đã làm chưa: gửi header `Origin: https://evil.example.com` tới backend
+  Render → response trả cố định `Access-Control-Allow-Origin: https://iot-air-pollution-monitoring.vercel.app`
+  → xác nhận **đã khoá xong từ trước** (không phải `*`), chỉ là doc chưa cập nhật — đã sửa mục 1
+  trong "Còn thiếu" thành đã xong. Cũng xác nhận `backend/.env` cục bộ chưa có biến `SMTP_*` nào
+  (email vẫn tắt) và `device-simulator/.env` chưa có `DEVICE_HMAC_SECRET` (đúng như log trước).
+- **2026-07-04 (tiếp, phiên cải thiện lớn)** — Người dùng yêu cầu làm hết các gợi ý cải thiện đã
+  đề xuất (trừ mục Wokwi), cộng thêm dashboard hiện nhiều thiết bị hơn. Đã hoàn thành:
+  1. **Vá lỗ hổng `nodemailer`** (mức High, nhiều CVE) — nâng `^6.x` → `^9.0.3` qua
+     `npm audit fix --force`, xác nhận `mailService.js` vẫn chạy đúng, `npm audit` sạch.
+  2. **Bộ lọc ngày `from`/`to` cho trang Lịch sử** — backend đã hỗ trợ sẵn, chỉ thiếu UI; thêm 2 ô
+     input ngày + nút xoá bộ lọc vào `History.jsx`, áp dụng cho cả xem lịch sử và xuất CSV.
+  3. **CI tối thiểu** (`.github/workflows/ci.yml`) — build backend/web/device-simulator, chạy
+     `npm test` (unit test mới cho `calculateAQI`/`levelFromAqi`/`parseTimestamp` bằng
+     `node --test`, không cần dependency ngoài) + `npm audit --audit-level=high` cho cả 3.
+  4. **Dashboard hiện biểu đồ chung nhiều thiết bị** — thay biểu đồ chỉ vẽ 1 device đang chọn bằng
+     `MultiDeviceChart` (tái dùng từ trang Compare) vẽ TẤT CẢ device cùng lúc, có chọn chỉ số.
+  5. **Tạo thêm device demo**: phát hiện `AQ-DEVICE-02` đã tồn tại nhưng thuộc **tài khoản khác**
+     (dữ liệu test rác từ 20/6) — tạo `AQ-DEVICE-03` và `AQ-DEVICE-04` đúng dưới owner của
+     `AQ-DEVICE-01` bằng script Mongo 1 lần (đã xoá sau khi chạy). **Việc còn cần bạn tự làm**: tạo
+     credential MQTT cho 2 device này trên HiveMQ Cloud console + chạy thêm instance
+     `device-simulator` (mỗi cái 1 `.env` riêng, đổi `DEVICE_ID`/`MQTT_USERNAME`/`MQTT_PASSWORD`)
+     để có dữ liệu thật hiện trên dashboard/Compare.
+  6. **Sentry error tracking (tuỳ chọn)** — thêm `backend/src/config/sentry.js` và
+     `web/src/sentry.js`, chỉ bật khi có `SENTRY_DSN`/`VITE_SENTRY_DSN` (giống pattern SMTP), tắt
+     hoàn toàn nếu để trống (đã xác nhận: khi tắt, Vite tree-shake sạch toàn bộ SDK khỏi bundle
+     production, không tốn dung lượng). **Việc còn cần bạn tự làm**: tự đăng ký tài khoản Sentry
+     (free tier) rồi điền DSN vào `backend/.env`/Render và `VITE_SENTRY_DSN` trên Vercel.
+  7. **Chuyển token từ `localStorage` sang cookie `httpOnly`** (thay vì script xoay vòng secret) —
+     đổi lớn nhất phiên này: backend set `accessToken`/`refreshToken` là cookie
+     `httpOnly; Secure; SameSite=None` (`authController.js`), `requireAuth` đọc từ
+     `req.cookies.accessToken`, Socket.IO handshake đọc cookie qua header `Cookie` thô (package
+     `cookie`, vì `cookie-parser` không chạy được trên request của engine.io). Frontend
+     (`client.js`, `AuthContext.jsx`, `Dashboard.jsx`) bỏ hoàn toàn `localStorage`/`Authorization`
+     header, dùng `withCredentials: true`. Đã cập nhật `docs/SECURITY.md` và `CLAUDE.md` (xoá mục
+     "gap" localStorage vì đã fix xong).
+     **Đã kiểm thử kỹ** (không chỉ tin build pass): test bằng `curl` + cookie jar toàn bộ luồng
+     register/me/refresh (xác nhận rotation + revoke token cũ)/logout; sau đó chạy thật 2 dev
+     server (backend + web) và dùng Playwright điều khiển Chromium thật để đăng ký → xác nhận
+     Dashboard load đúng, cookie đúng `httpOnly`/`Secure`/`SameSite=None`/path, `localStorage`
+     rỗng (không rò token), Socket.IO connect thành công (thấy log
+     `[socket] user ... connected/disconnected` ở backend), logout xoá cookie + quay lại `/login`
+     đúng — có ảnh chụp màn hình xác nhận.
+     **Sự cố phụ trong lúc làm (đã tự khắc phục)**: 1 lệnh `npm install @sentry/node` chạy nhầm ở
+     thư mục ngoài project (do `cd ..` trước đó) khiến nó cài nhầm vào 1 `package.json` cá nhân
+     khác của bạn ở `C:\Users\Rivershen\package.json` (không liên quan tới project này) — đã phát
+     hiện qua `npm audit` báo lỗ hổng lạ và gỡ sạch bằng `npm uninstall @sentry/node` ở đúng thư
+     mục đó, xác nhận `package.json`/`package-lock.json` khôi phục nguyên trạng trước khi cài lại
+     đúng chỗ (`backend/`).

@@ -1,10 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { api, getAccessToken } from '../api/client.js';
+import { api } from '../api/client.js';
 import SensorCard from '../components/SensorCard.jsx';
-import RealtimeChart from '../components/RealtimeChart.jsx';
+import MultiDeviceChart from '../components/MultiDeviceChart.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+const CHART_METRICS = [
+  { key: 'co2_ppm', label: 'CO2 (ppm)' },
+  { key: 'co_ppm', label: 'CO (ppm)' },
+  { key: 'pm25_ugm3', label: 'PM2.5 (µg/m³)' },
+  { key: 'temperature_c', label: 'Nhiệt độ (°C)' },
+  { key: 'humidity_pct', label: 'Độ ẩm (%)' },
+];
 
 export default function Dashboard() {
   const [devices, setDevices] = useState([]);
@@ -12,6 +20,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState({});
   const [alerts, setAlerts] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  const [chartMetric, setChartMetric] = useState('co2_ppm');
 
   const loadDevices = useCallback(async () => {
     const { data } = await api.get('/devices');
@@ -36,9 +45,10 @@ export default function Dashboard() {
     loadDevices();
   }, [loadDevices]);
 
-  // Kết nối WebSocket realtime, xác thực bằng access token hiện có (xem socket.js phía backend)
+  // Kết nối WebSocket realtime — xác thực bằng cookie httpOnly "accessToken" gửi kèm tự động
+  // (xem socket.js phía backend), JS phía client không cần tự đọc/gắn token nữa.
   useEffect(() => {
-    const socket = io(API_URL, { auth: { token: getAccessToken() } });
+    const socket = io(API_URL, { withCredentials: true });
 
     socket.on('reading:new', (reading) => {
       setReadings((prev) => ({ ...prev, [reading.deviceId]: reading }));
@@ -59,8 +69,8 @@ export default function Dashboard() {
     return () => socket.disconnect();
   }, []);
 
-  const selectedDevice = devices.find((d) => d._id === selectedDeviceId);
-  const selectedHistory = selectedDevice ? history[selectedDevice.deviceId] || [] : [];
+  const deviceNames = Object.fromEntries(devices.map((d) => [d.deviceId, d.name]));
+  const hasAnyHistory = devices.some((d) => (history[d.deviceId] || []).length > 0);
 
   return (
     <div>
@@ -119,10 +129,22 @@ export default function Dashboard() {
         })}
       </div>
 
-      {selectedDevice && selectedHistory.length > 0 && (
+      {hasAnyHistory && (
         <div className="chart-section">
-          <h2>Biểu đồ realtime — {selectedDevice.name}</h2>
-          <RealtimeChart data={selectedHistory} />
+          <div className="history-controls">
+            <h2>Biểu đồ realtime — tất cả thiết bị</h2>
+            <label>
+              Chỉ số:
+              <select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
+                {CHART_METRICS.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <MultiDeviceChart seriesByDevice={history} deviceNames={deviceNames} metric={chartMetric} />
         </div>
       )}
     </div>

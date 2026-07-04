@@ -5,6 +5,7 @@ import Alert from '../models/Alert.js';
 import User from '../models/User.js';
 import { calculateAQI } from '../utils/airQualityIndex.js';
 import { sendAlertEmail } from './mailService.js';
+import { captureException } from '../config/sentry.js';
 
 const TELEMETRY_TOPIC_FILTER = 'devices/+/telemetry';
 const STATUS_TOPIC_FILTER = 'devices/+/status';
@@ -22,7 +23,7 @@ function deviceIdFromTopic(topic) {
   return parts[1];
 }
 
-function parseTimestamp(ts) {
+export function parseTimestamp(ts) {
   if (ts === undefined || ts === null) return new Date();
   if (typeof ts === 'number') {
     // Wokwi firmware gửi epoch giây (millis()/1000); chuẩn hoá sang epoch ms.
@@ -213,8 +214,12 @@ export function startMqttIngestService(mqttClient, io) {
     } catch (err) {
       // Lỗi validate (freshness/replay) đã có err.status — log warn thay vì error để phân biệt
       // với lỗi hạ tầng thật sự (DB down, v.v.)
-      if (err.status) console.warn(`[mqtt-ingest] rejected reading from device "${deviceId}": ${err.message}`);
-      else console.error('[mqtt-ingest] processing error:', err.message);
+      if (err.status) {
+        console.warn(`[mqtt-ingest] rejected reading from device "${deviceId}": ${err.message}`);
+      } else {
+        console.error('[mqtt-ingest] processing error:', err.message);
+        captureException(err);
+      }
     }
   });
 }

@@ -3,6 +3,8 @@ import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { setupExpressErrorHandler } from './config/sentry.js';
 
 import { connectDB } from './config/db.js';
 import { connectMqtt } from './config/mqtt.js';
@@ -25,6 +27,7 @@ const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 app.use(helmet());
 app.use(cors({ origin: corsOrigin, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: '256kb' }));
 app.use('/api', apiLimiter);
 
@@ -36,6 +39,7 @@ app.use('/api/readings', readingRoutes);
 app.use('/api/ingest', ingestRoutes);
 
 app.use(notFoundHandler);
+setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 async function main() {
