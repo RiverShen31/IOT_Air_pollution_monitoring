@@ -23,6 +23,11 @@ import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 const app = express();
 const httpServer = http.createServer(app);
 
+// Render (và mọi PaaS tương tự) đặt app sau đúng 1 reverse proxy — cần "trust proxy" để
+// express-rate-limit/req.ip đọc đúng IP thật từ X-Forwarded-For thay vì báo lỗi validation
+// (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) hoặc rate-limit nhầm theo IP của proxy.
+app.set('trust proxy', 1);
+
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 app.use(helmet());
