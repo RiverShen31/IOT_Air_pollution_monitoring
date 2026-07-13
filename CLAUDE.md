@@ -98,9 +98,13 @@ Devices publish to `devices/{deviceId}/telemetry` (QoS 1) with payload:
 ```json
 { "ts": "...", "co2_ppm": 612, "co_ppm": 4.2, "pm25_ugm3": 38, "temperature_c": 29.5, "humidity_pct": 68 }
 ```
-`ts` may be an ISO string or epoch seconds/ms (the Wokwi firmware sends epoch seconds since
-`millis()`-based clocks have no real date) — `parseTimestamp()` in
-`backend/src/services/mqttIngestService.js` normalizes both. Device online/offline state is a
+`ts` may be an ISO string or epoch seconds/ms — `parseTimestamp()` in
+`backend/src/services/mqttIngestService.js` normalizes both. `wokwi/sketch.ino` syncs real time
+via NTP (`syncTimeViaNTP()`, called once in `setup()`) before publishing and sends real epoch
+seconds from `time(nullptr)`; it must **not** send raw `millis()/1000` (time-since-boot), since
+`ingestTelemetry()`'s replay/freshness guard rejects any `ts` more than 5 minutes from the
+server's real clock, and a fresh boot's `millis()` counter parses to a ~1970 date. Device
+online/offline state is a
 retained LWT message on `devices/{deviceId}/status`. **This schema is the contract** between
 `device-simulator/simulate.js`, `wokwi/sketch.ino`, and `mqttIngestService.js` — changing field
 names requires updating all three (plus `backend/src/utils/airQualityIndex.js` if pollutant

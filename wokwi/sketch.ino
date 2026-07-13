@@ -12,6 +12,7 @@
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
@@ -86,6 +87,22 @@ void connectWiFi() {
   Serial.printf("\nWiFi connected. IP: %s\n", WiFi.localIP().toString().c_str());
 }
 
+// ESP32 không có RTC pin sẵn, sau khi boot đồng hồ hệ thống bắt đầu từ epoch 0 — nếu dùng
+// millis()/1000 làm "ts" thì backend sẽ tính ra ngày 1970 (lệch hàng chục năm so với giờ thật),
+// bị chặn bởi kiểm tra "freshness window" (±5 phút) trong ingestTelemetry() và mọi reading sẽ
+// bị âm thầm reject. Đồng bộ giờ thật qua NTP ngay sau khi có WiFi để lấy đúng epoch giây thật.
+void syncTimeViaNTP() {
+  Serial.print("Syncing time via NTP");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(nullptr);
+  while (now < 100000) { // chưa sync xong thì time() vẫn trả về giá trị rất nhỏ (gần epoch 0)
+    delay(300);
+    Serial.print(".");
+    now = time(nullptr);
+  }
+  Serial.printf(" done, epoch=%lu\n", (unsigned long)now);
+}
+
 void connectMQTT() {
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   while (!mqtt.connected()) {
@@ -153,6 +170,7 @@ void setup() {
 
   setupMqttTransport();
   connectWiFi();
+  syncTimeViaNTP();
   connectMQTT();
 }
 
@@ -175,7 +193,7 @@ void loop() {
       temperature = 0;
     }
 
-    uint32_t tsEpoch = (uint32_t)(millis() / 1000); // backend chấp nhận epoch giây hoặc ISO string
+    uint32_t tsEpoch = (uint32_t)time(nullptr); // epoch giây thật (đã sync NTP ở setup()), backend chấp nhận epoch giây hoặc ISO string
 
     StaticJsonDocument<512> doc;
     doc["ts"] = tsEpoch;

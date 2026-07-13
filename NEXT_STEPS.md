@@ -265,3 +265,68 @@ Từ 04/07/2026: theo yêu cầu của chủ dự án, mọi bước xử lý/th
      hiện qua `npm audit` báo lỗ hổng lạ và gỡ sạch bằng `npm uninstall @sentry/node` ở đúng thư
      mục đó, xác nhận `package.json`/`package-lock.json` khôi phục nguyên trạng trước khi cài lại
      đúng chỗ (`backend/`).
+- **2026-07-05** — Người dùng báo lỗi thật trên production sau khi deploy các thay đổi trên:
+  1. **404 trên mọi route trừ `/`** (vd `/login`, `/register` refresh trực tiếp) — do Vercel
+     preset Vite không tự thêm SPA fallback rewrite. Đã thêm `web/vercel.json`
+     (`rewrites: [{ source: "/(.*)", destination: "/index.html" }]`), commit `3326b29`, xác nhận
+     lại bằng `curl` trực tiếp: tất cả route trả 200 sau khi deploy.
+  2. **Đăng nhập/đăng ký xong bị tự logout ngay** — người dùng gửi log Render, thấy lặp lại
+     `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` từ `express-rate-limit`: do chưa cấu hình
+     `app.set('trust proxy', 1)` trong khi Render (reverse proxy) luôn thêm header
+     `X-Forwarded-For`. Đã thêm dòng này vào `backend/src/server.js`, `node --check` + `npm test`
+     pass, commit `5564870` ("Set trust proxy for Render's reverse proxy"), push, xác nhận CI
+     pass và backend lên lại bình thường sau 1 khoảng blip SSL ngắn giữa lúc Render redeploy.
+  **Chưa xác nhận lại từ người dùng** liệu đăng nhập trên production đã ổn hẳn chưa sau fix này.
+- **2026-07-05 (tiếp)** — Người dùng hỏi lại vì sao `AQ-DEVICE-03`/`AQ-DEVICE-04` chưa có dữ liệu.
+  Kiểm tra: (a) không có tiến trình `node` nào chạy nền trên máy hiện tại (kể cả cho
+  `AQ-DEVICE-01`) — `AQ-DEVICE-01` trong Mongo đang `status: offline`, `lastReadingAt` đã hơn ~18
+  tiếng (tiến trình chạy tay trước đó đã dừng khi đóng phiên, đúng như log 2026-07-04 dự đoán);
+  (b) `AQ-DEVICE-03`/`04` có field `mqttUsername` trong Mongo (tự sinh khi tạo `Device` qua script)
+  nhưng đây **không phải** là credential thật trên HiveMQ Cloud broker — theo đúng thiết kế decoupled
+  đã ghi trong `CLAUDE.md`, 2 device này vẫn chưa có credential MQTT thật nào được tạo trên HiveMQ
+  console, nên chưa từng có tiến trình `device-simulator` nào publish được cho chúng, kể cả trên
+  Render. **Việc còn cần bạn tự làm**: tạo 2 credential PUBLISH_ONLY trên HiveMQ Cloud console cho
+  `AQ-DEVICE-03`/`04`, gửi mật khẩu đã đặt; đồng thời cân nhắc chạy lại `device-simulator` cho
+  `AQ-DEVICE-01` (local `npm start` hoặc deploy Render Bước 9) vì tiến trình cũ đã dừng.
+- **2026-07-05 (tiếp)** — Đã khởi động lại `AQ-DEVICE-01` (`npm start`, PID chạy nền). Người dùng
+  tự tạo xong 2 credential `PUBLISH_ONLY` trên HiveMQ Cloud console cho `AQ-DEVICE-03`/`04` và gửi
+  mật khẩu. Chạy thêm 2 tiến trình `device-simulator` nền (dùng biến môi trường override thay vì
+  sửa `.env` chung: `MQTT_USERNAME`/`MQTT_PASSWORD`/`DEVICE_ID` riêng + `PORT=3001`/`3002` để
+  tránh đụng cổng health server 3000 của `AQ-DEVICE-01`) — connect MQTT thành công, publish đều,
+  nhưng lần đầu `readingCount` vẫn = 0: phát hiện `AQ-DEVICE-03`/`04` đã có `hmacSecret` set sẵn
+  trong Mongo (tự sinh lúc tạo `Device` trước đó) nên backend âm thầm reject payload chưa ký
+  (`signature check failed`, chỉ warn log, không lỗi rõ ràng) — đây là lý do `device.status` vẫn
+  lên `online` (qua retained `/status` LWT, không qua kiểm tra chữ ký) trong khi `Reading` = 0,
+  dễ gây nhầm lẫn. Khắc phục: lấy `hmacSecret` thật của từng device từ Mongo (script 1 lần, đã
+  xoá), khởi động lại 2 tiến trình với `DEVICE_HMAC_SECRET` tương ứng để bật ký HMAC đúng theo
+  thiết kế bảo mật đã có sẵn (không tắt tính năng ký để né lỗi). Xác nhận lại: cả 3 device đều
+  `status: online` và `readingCount` tăng đều theo thời gian thực.
+- **2026-07-05 (tiếp)** — Người dùng hỏi rõ nguồn gốc dữ liệu hiện tại (xác nhận: hoàn toàn giả
+  lập từ `device-simulator`, không phải phần cứng thật) và muốn thử tích hợp Wokwi (đã có sẵn
+  code từ trước, phần "Chế độ B" trong `wokwi/README.md`) để gửi dữ liệu realtime vào backend
+  thật. Đã tạo `Device` record `AQ-DEVICE-WOKWI-01` trong Mongo (cùng owner với `AQ-DEVICE-01`,
+  script 1 lần đã xoá), sinh sẵn `hmacSecret` để tránh lặp lại đúng lỗi "signature check failed"
+  vừa gặp với `AQ-DEVICE-03`/`04`. **Việc còn cần bạn tự làm**: tạo 1 credential `PUBLISH_ONLY`
+  trên HiveMQ Cloud console cho username `AQ-DEVICE-WOKWI-01`, rồi làm theo `wokwi/README.md`
+  mục "Chế độ B" (dán `sketch.ino`/`diagram.json`/`libraries.txt` vào project mới trên wokwi.com,
+  sửa 4 dòng cấu hình `MQTT_HOST`/`MQTT_PORT=8883`/`MQTT_USER`/`MQTT_PASS`, và điền
+  `DEVICE_HMAC_SECRET` = giá trị đã sinh) → bấm Play, dữ liệu sẽ vào thẳng Mongo + hiện realtime
+  trên dashboard giống 3 device Node.js hiện có.
+- **2026-07-05 (tiếp)** — Người dùng chạy thử Wokwi thành công (connect MQTT, publish log đều mỗi
+  5s, không lỗi), nhưng dashboard vẫn không hiện dữ liệu. Debug bằng cách gọi trực tiếp
+  `parseTimestamp()` (export sẵn từ trước để unit-test) với `ts` mẫu lấy từ log thật (`ts: 28`):
+  phát hiện **lỗi thật trong `wokwi/sketch.ino`**, không phải do thao tác của người dùng —
+  firmware gửi `tsEpoch = millis()/1000` (thời gian tính từ lúc boot, KHÔNG phải epoch thật), nên
+  backend parse ra ngày `1970-01-01` — lệch hàng chục năm so với giờ server thật, bị chặn bởi
+  kiểm tra "freshness window" ±5 phút trong `ingestTelemetry()` (`mqttIngestService.js`) → mọi
+  reading bị âm thầm reject (chỉ log `console.warn` phía backend, Serial Monitor của Wokwi không
+  thấy được nên trông như publish thành công). Đây là lỗi sẽ ảnh hưởng **cả phần cứng ESP32 thật**
+  (không có RTC pin sẵn), không chỉ riêng Wokwi. Đã sửa `wokwi/sketch.ino`: thêm hàm
+  `syncTimeViaNTP()` (gọi `configTime()` + đợi `time(nullptr)` hợp lệ) chạy 1 lần trong `setup()`
+  ngay sau khi có WiFi, và đổi `tsEpoch` sang lấy từ `time(nullptr)` (epoch giây thật) thay vì
+  `millis()/1000`. Cũng cập nhật lại đoạn mô tả sai trong `CLAUDE.md` (mục "Data flow") vì trước
+  đó ghi nhầm là "Wokwi gửi epoch giây vì millis()-based clocks không có ngày thật" — mô tả đó chỉ
+  đúng ở hiện tượng, không đúng ở việc điều này **được backend chấp nhận**; giờ đã sửa để phản ánh
+  đúng: firmware phải NTP-sync trước khi gửi. **Việc còn cần bạn tự làm**: dán lại toàn bộ nội
+  dung `sketch.ino` đã sửa vào project trên wokwi.com, bấm Play lại — Serial Monitor sẽ in thêm
+  dòng "Syncing time via NTP... done, epoch=..." trước khi bắt đầu publish.
