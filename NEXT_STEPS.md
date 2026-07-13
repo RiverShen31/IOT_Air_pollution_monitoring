@@ -330,3 +330,35 @@ Từ 04/07/2026: theo yêu cầu của chủ dự án, mọi bước xử lý/th
   đúng: firmware phải NTP-sync trước khi gửi. **Việc còn cần bạn tự làm**: dán lại toàn bộ nội
   dung `sketch.ino` đã sửa vào project trên wokwi.com, bấm Play lại — Serial Monitor sẽ in thêm
   dòng "Syncing time via NTP... done, epoch=..." trước khi bắt đầu publish.
+- **2026-07-13** — Chủ dự án muốn bàn giao cho người tiếp theo cùng vào làm, nhưng **giữ nguyên
+  quyền owner của mình** (chỉ thêm người kia làm admin/collaborator ở từng nơi, không transfer
+  ownership). Đã commit + push fix NTP ở trên (`17fab38`) để repo trên GitHub đầy đủ trước khi
+  bàn giao. **Việc còn cần bạn tự làm** (đều là thao tác trên web console, không có API/CLI):
+  1. **GitHub** (`RiverShen31/IOT_Air_pollution_monitoring`, đang public) — Settings →
+     Collaborators and teams → Add people → nhập username/email GitHub của người kia → quyền
+     `Write` (đủ push code) hoặc `Admin` (nếu cần họ tự sửa repo settings/CI). Họ phải bấm accept
+     invite qua email.
+  2. **Render** (backend, service `srv-d8qv8pvavr4c73dsgts0`) — mời ở cấp **Workspace** chứ
+     không phải từng service: góc trên trái chọn workspace hiện tại → Settings → Team/Members →
+     Invite Member → nhập email → chọn role.
+  3. **Vercel** (web) → project Settings → Members → Invite → nhập email. Lưu ý: nếu account
+     đang ở gói Hobby cá nhân (không phải Team), Vercel có thể bắt tạo Team trước khi mời được
+     thêm người — kiểm tra khi tới bước này, không chắc chắn trước.
+  4. **MongoDB Atlas** (project chứa `cluster0.fqwfzcd`) → Access Manager → Project Access →
+     Add New User → nhập email → chọn role (vd `Project Data Access Admin` để xem/sửa data mà
+     không đụng billing, hoặc `Project Owner` nếu muốn họ ngang quyền bạn).
+  5. **HiveMQ Cloud** (cluster `7907f0b393c042ee...`) → kiểm tra mục quản lý team ở cấp
+     **account** (không phải cluster). Gói Serverless free có thể giới hạn 1 người dùng/account —
+     nếu không mời được, fallback ở mục 6.
+  6. **Fallback nếu 1 platform không hỗ trợ mời thêm người ở gói free** (hay gặp ở Vercel
+     Hobby / HiveMQ Serverless): đổi mật khẩu tài khoản đó sang mật khẩu mới rồi chia sẻ qua kênh
+     an toàn (password manager, không qua chat/email thường), dùng chung tạm thời cho tới khi
+     nâng cấp gói hoặc tách account riêng.
+  7. **Secret cục bộ** (`backend/.env`, `web/.env`, `device-simulator/.env` — không nằm trong git,
+     không nằm trong console nào ở trên) phải gửi trực tiếp qua kênh an toàn: `MONGO_URI`,
+     `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`, `MQTT_USERNAME`/`MQTT_PASSWORD`, và nếu có dùng thì
+     `SMTP_USER`/`SMTP_PASS` (Gmail App Password — nên tạo App Password riêng cho việc này thay vì
+     gửi mật khẩu Gmail chính, để có thể thu hồi độc lập) và `SENTRY_DSN`/`VITE_SENTRY_DSN`.
+  8. `mosquitto/config/password_file` — không cần gửi (không nằm trong git, chỉ dùng cho path
+     Docker local); người tiếp theo tự tạo lại bằng `mosquitto/config/init-credentials.sh` nếu họ
+     chọn chạy local thay vì cloud.
