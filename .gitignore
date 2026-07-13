@@ -7,3 +7,7 @@ mosquitto/config/password_file
 *.log
 .DS_Store
 memory/
+
+# Per-device Wokwi project folders contain real MQTT passwords + DEVICE_HMAC_SECRET filled in
+# locally for convenience (copy-paste into wokwi.com) — repo is public, must never commit these.
+wokwi/AQ-DEVICE-WOKWI-*/

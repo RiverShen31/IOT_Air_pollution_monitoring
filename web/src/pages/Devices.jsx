@@ -48,6 +48,10 @@ export default function Devices() {
     await loadDevices();
   }
 
+  async function handleCopy(text) {
+    await navigator.clipboard.writeText(text);
+  }
+
   async function handleUpdateThresholds(device, field, value) {
     const numericValue = Number(value);
     await api.patch(`/devices/${device._id}`, {
@@ -91,6 +95,9 @@ export default function Devices() {
             <code>wokwi/sketch.ino</code>):
           </p>
           <code>{provisioning.hmacSecret}</code>
+          <button type="button" onClick={() => handleCopy(provisioning.hmacSecret)}>
+            Copy
+          </button>
         </div>
       )}
 
@@ -140,10 +147,14 @@ export default function Devices() {
               </td>
               <td className="api-key-cell" title={device.apiKey}>
                 {device.apiKey.slice(0, 10)}...
+                <button onClick={() => handleCopy(device.apiKey)}>Copy</button>
                 <button onClick={() => handleRegenerateKey(device._id)}>Tạo lại</button>
               </td>
               <td className="api-key-cell" title={device.hmacSecret || ''}>
                 {device.hmacSecret ? `${device.hmacSecret.slice(0, 10)}...` : '(chưa bật)'}
+                {device.hmacSecret && (
+                  <button onClick={() => handleCopy(device.hmacSecret)}>Copy</button>
+                )}
                 <button onClick={() => handleRegenerateHmac(device._id)}>Tạo lại</button>
               </td>
               <td>
