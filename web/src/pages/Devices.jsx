@@ -42,6 +42,12 @@ export default function Devices() {
     await loadDevices();
   }
 
+  async function handleRegenerateHmac(id) {
+    const { data } = await api.post(`/devices/${id}/hmac-secret/regenerate`);
+    alert(`hmacSecret mới: ${data.device.hmacSecret}`);
+    await loadDevices();
+  }
+
   async function handleUpdateThresholds(device, field, value) {
     const numericValue = Number(value);
     await api.patch(`/devices/${device._id}`, {
@@ -99,6 +105,7 @@ export default function Devices() {
             <th>Ngưỡng CO</th>
             <th>Ngưỡng PM2.5</th>
             <th>API Key</th>
+            <th>HMAC Secret</th>
             <th></th>
           </tr>
         </thead>
@@ -134,6 +141,10 @@ export default function Devices() {
               <td className="api-key-cell" title={device.apiKey}>
                 {device.apiKey.slice(0, 10)}...
                 <button onClick={() => handleRegenerateKey(device._id)}>Tạo lại</button>
+              </td>
+              <td className="api-key-cell" title={device.hmacSecret || ''}>
+                {device.hmacSecret ? `${device.hmacSecret.slice(0, 10)}...` : '(chưa bật)'}
+                <button onClick={() => handleRegenerateHmac(device._id)}>Tạo lại</button>
               </td>
               <td>
                 <button className="danger" onClick={() => handleDelete(device._id)}>
