@@ -194,7 +194,12 @@ thiết kế CORS trong `docs/SECURITY.md`.
 3. Hoặc dùng Wokwi (xem `wokwi/README.md`, chế độ B) — sửa `MQTT_HOST`/`MQTT_PORT`/`MQTT_USER`/
    `MQTT_PASS` trong `sketch.ino` trỏ thẳng vào HiveMQ Cloud (không cần ngrok vì broker đã public).
 
-## Bước 9 — Deploy `device-simulator` như service 24/7 (khắc phục "mất dữ liệu khi tắt máy")
+## Bước 9 — (Không còn dùng) Deploy `device-simulator` như service 24/7
+
+> **Cập nhật 2026-07-13**: dự án đã chuyển hẳn sang dùng **Wokwi** (`wokwi/README.md`, Chế độ B)
+> làm nguồn telemetry duy nhất thay vì `device-simulator/` — xem mục "Chuyển sang Wokwi" trong
+> `NEXT_STEPS.md`. `render.yaml` đã bỏ service này khỏi Blueprint. Giữ lại hướng dẫn dưới đây chỉ
+> để tham khảo nếu sau này cần bật lại `device-simulator` như 1 service 24/7.
 
 `device-simulator` mặc định chỉ là 1 script chạy tay trên máy local — hễ đóng terminal/tắt máy
 thì hết dữ liệu telemetry mới, dù backend/broker/DB vẫn "sống" bình thường (xem sự cố ghi trong

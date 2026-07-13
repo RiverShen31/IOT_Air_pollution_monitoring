@@ -79,6 +79,12 @@ export default function Devices() {
         <div className="provisioning-box">
           <p>{provisioning.note}</p>
           <code>{provisioning.command}</code>
+          <p>
+            <strong>hmacSecret</strong> (lưu lại ngay, không hiện lại được — dùng cho
+            <code> DEVICE_HMAC_SECRET</code> trong <code>device-simulator/.env</code> hoặc{' '}
+            <code>wokwi/sketch.ino</code>):
+          </p>
+          <code>{provisioning.hmacSecret}</code>
         </div>
       )}
 

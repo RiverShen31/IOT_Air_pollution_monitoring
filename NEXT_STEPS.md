@@ -106,10 +106,12 @@ hễ không ai mở máy chạy nó thì hệ thống phía sau (broker/backend/
 
 Xếp theo mức độ ưu tiên/độ khó:
 
-1. **Chạy `device-simulator` như service 24/7** — trực tiếp xử lý gốc rễ sự cố ở trên. Deploy
-   thêm 1 Render Background Worker (hoặc Railway/Fly.io free) chạy `node simulate.js` liên tục,
-   thay vì phụ thuộc vào việc ai đó mở máy local. Đây là cải tiến "chi phí thấp, giá trị cao"
-   nhất vì fix luôn nguyên nhân mất dữ liệu.
+1. ~~Chạy `device-simulator` như service 24/7~~ — **đã đổi hướng 2026-07-13**: thay vì deploy
+   `device-simulator` 24/7, dự án chuyển hẳn sang dùng **Wokwi** làm nguồn telemetry duy nhất
+   (xem mục "Chuyển sang Wokwi" trong nhật ký bên dưới). Lưu ý: Wokwi cũng không phải service
+   24/7 — vẫn cần mở tab trình duyệt khi cần dữ liệu, chỉ khác ở chỗ dữ liệu mô phỏng "giống thật"
+   hơn (chạy đúng firmware C++ qua thư viện `PubSubClient`) thay vì script Node.js sinh số ngẫu
+   nhiên.
 2. **Cảnh báo "mất kết nối thiết bị"** — hiện đã có LWT (`devices/{id}/status` → offline) nhưng
    chưa thấy cơ chế chủ động cảnh báo khi *không có bản ghi mới trong X phút* (khác với việc mất
    kết nối MQTT tường minh). Thêm 1 cron job/kiểm tra định kỳ trong backend: nếu
@@ -362,3 +364,54 @@ Từ 04/07/2026: theo yêu cầu của chủ dự án, mọi bước xử lý/th
   8. `mosquitto/config/password_file` — không cần gửi (không nằm trong git, chỉ dùng cho path
      Docker local); người tiếp theo tự tạo lại bằng `mosquitto/config/init-credentials.sh` nếu họ
      chọn chạy local thay vì cloud.
+- **2026-07-13 (tiếp)** — Người dùng báo dashboard Vercel lại không có dữ liệu. Kiểm tra: `GET
+  /health` trên Render → OK; không có tiến trình `node.exe` nào chạy trên máy → **lặp lại đúng
+  y hệt root cause đã gặp 04/07 và 05/07**: không ai chạy `device-simulator` liên tục, service
+  Render thứ 2 (`air-pollution-device-simulator`, Bước 9 trong `docs/DEPLOYMENT.md`, cấu hình đã
+  có sẵn trong `render.yaml`) **vẫn chưa được deploy thật** — đây vẫn là gốc rễ chưa xử lý dứt
+  điểm sau 2 lần gặp trước. Đã khởi động lại `AQ-DEVICE-01` (`npm start` nền, dùng `.env` cục bộ
+  sẵn có) → connect MQTT + publish thành công ngay, xác nhận log in đều mỗi 5s. **Việc còn cần
+  bạn tự làm để hết lặp lại vĩnh viễn**: thực hiện Bước 9 trong `docs/DEPLOYMENT.md` (tạo Web
+  Service thứ 2 trên Render dashboard trỏ `rootDir: device-simulator`) — đã đề xuất 3 lần, vẫn là
+  việc ưu tiên cao nhất còn lại của dự án.
+- **2026-07-13 (tiếp) — Chuyển sang Wokwi** — Người dùng quyết định bỏ hẳn `device-simulator`
+  khỏi vận hành (không xoá code, chỉ ngừng chạy + bỏ khỏi kế hoạch deploy), dùng Wokwi làm nguồn
+  telemetry duy nhất vì mô phỏng "giống thật" hơn (chạy đúng firmware `sketch.ino` qua
+  `PubSubClient`, thay vì script Node.js sinh số ngẫu nhiên). Đã làm:
+  1. Kill 2 tiến trình `node.exe` (`AQ-DEVICE-01`, PID 16940 npm wrapper + PID 9172 script con)
+     đang chạy nền từ bước trước trong cùng phiên này.
+  2. Xoá block service `air-pollution-device-simulator` khỏi `render.yaml` (backend giữ nguyên).
+  3. Đánh dấu Bước 9 trong `docs/DEPLOYMENT.md` là "không còn dùng", giữ lại nội dung để tham
+     khảo nếu sau này cần bật lại.
+  4. Cập nhật mục "Gợi ý phát triển" #1 ở trên phản ánh quyết định mới.
+
+  **Việc còn cần bạn tự làm trên wokwi.com (không có API/CLI, phải thao tác UI)**:
+  1. Mở lại project Wokwi đã tạo hôm 2026-07-05 (hoặc **New Project** → ESP32 nếu không tìm lại
+     được) → dán `wokwi/diagram.json`, `wokwi/sketch.ino` (bản mới nhất, đã fix NTP — commit
+     `17fab38`), `wokwi/libraries.txt` theo đúng `wokwi/README.md`.
+  2. Xác nhận thiết bị `AQ-DEVICE-WOKWI-01` còn tồn tại: đăng nhập web app →
+     `https://iot-air-pollution-monitoring.vercel.app/devices` → tìm `AQ-DEVICE-WOKWI-01`. Nếu
+     không còn (có thể đã bị xoá), tạo mới qua nút "Thêm thiết bị" trên trang này — response trả
+     về sẽ có `mqttUsername`/`hmacSecret` mới, lưu lại ngay (chỉ hiện 1 lần).
+  3. Nếu thiết bị còn nhưng **không nhớ `hmacSecret` cũ** (secret không hiện lại được qua UI):
+     mở DevTools Console ngay trên trang `/devices` (đang đăng nhập, cookie httpOnly tự đính kèm)
+     và chạy:
+     ```js
+     fetch('https://iot-air-pollution-monitoring.onrender.com/api/devices/<deviceId>/hmac-secret/regenerate',
+       { method: 'POST', credentials: 'include' }).then(r => r.json()).then(console.log)
+     ```
+     (`<deviceId>` là Mongo `_id`, xem trong Network tab lúc load trang `/devices`, hoặc trong
+     response object trả về khi tạo thiết bị). Kết quả in ra `device.hmacSecret` mới — dùng giá
+     trị này ở bước 5.
+  4. Kiểm tra credential MQTT `AQ-DEVICE-WOKWI-01` trên HiveMQ Cloud console
+     (https://console.hivemq.cloud/clusters/7907f0b393c042ee8addaaade1bbfb52/access-management)
+     còn tồn tại và là `PUBLISH_ONLY` không — nếu không, tạo lại (nhớ lưu password mới).
+  5. Trong `sketch.ino` trên Wokwi, điền Chế độ B (mục `wokwi/README.md`):
+     `MQTT_HOST`/`MQTT_PORT=8883`/`MQTT_USER=AQ-DEVICE-WOKWI-01`/`MQTT_PASS`, và
+     `DEVICE_HMAC_SECRET` = giá trị lấy ở bước 2 hoặc 3.
+  6. Bấm ▶️ Play → mở Serial Monitor xác nhận thấy dòng NTP sync xong rồi mới publish → mở
+     dashboard Vercel xác nhận dữ liệu hiện realtime.
+  7. Lưu ý quan trọng đã nhắc trước khi làm: Wokwi chỉ publish khi tab trình duyệt đang mở và
+     đang chạy mô phỏng — không phải service 24/7, giống hệt hạn chế của `device-simulator` chạy
+     tay trước đây, chỉ đổi từ "mở terminal" sang "mở tab Wokwi". Nếu đóng tab/tắt máy, dashboard
+     sẽ lại hết dữ liệu mới y như các lần trước.

@@ -33,29 +33,7 @@ services:
       - key: CORS_ORIGIN
         sync: false
 
-  # Render free tier không có Background Worker miễn phí — deploy device-simulator như 1 Web
-  # Service (nhờ health server thuần http trong simulate.js) để có dữ liệu telemetry chảy liên
-  # tục mà không phụ thuộc máy local. Cần UptimeRobot ping (giống service backend ở trên) để
-  # tránh ngủ sau ~15 phút không request — xem NEXT_STEPS.md.
-  - type: web
-    name: air-pollution-device-simulator
-    runtime: node
-    rootDir: device-simulator
-    plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: MQTT_HOST
-        sync: false
-      - key: DEVICE_ID
-        sync: false
-      - key: MQTT_USERNAME
-        sync: false
-      - key: MQTT_PASSWORD
-        sync: false
-      - key: DEVICE_HMAC_SECRET
-        sync: false
-      - key: PUBLISH_INTERVAL_MS
-        value: "5000"
-      - key: SCENARIO
-        value: normal
+  # Service air-pollution-device-simulator đã bị bỏ khỏi kế hoạch deploy (2026-07-13): dự án
+  # chuyển hẳn sang dùng Wokwi (wokwi/README.md, Chế độ B) làm nguồn telemetry duy nhất thay vì
+  # device-simulator/. Code device-simulator/ vẫn còn trong repo để tham khảo/chạy tay khi cần,
+  # chỉ không còn nằm trong Blueprint deploy này. Nếu muốn dùng lại, xem lịch sử git của file này.
