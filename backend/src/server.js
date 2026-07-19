@@ -16,6 +16,7 @@ import authRoutes from './routes/authRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import readingRoutes from './routes/readingRoutes.js';
 import ingestRoutes from './routes/ingestRoutes.js';
+import debugRoutes from './routes/debugRoutes.js';
 
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
@@ -42,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/readings', readingRoutes);
 app.use('/api/ingest', ingestRoutes);
+app.use('/api/debug', debugRoutes);
 
 app.use(notFoundHandler);
 setupExpressErrorHandler(app);
