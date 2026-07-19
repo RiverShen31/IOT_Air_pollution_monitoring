@@ -127,20 +127,27 @@ void connectMQTT() {
 }
 
 // ---- Đọc cảm biến giả lập (potentiometer 0-4095 trên ADC ESP32) ----
+// Thêm noise nhỏ (±8%) để mô phỏng cảm biến thật có biến động tự nhiên
 
 float readCO2ppm() {
   int raw = analogRead(MQ135_PIN);
-  return (float)map(raw, 0, 4095, 400, 2000); // quy đổi sang ppm (giống dải đo MQ135 thực tế)
+  float base = (float)map(raw, 0, 4095, 400, 2000);
+  float noise = (random(-8, 9)) / 100.0f; // ±8%
+  return base * (1.0f + noise);
 }
 
 float readCOppm() {
   int raw = analogRead(MQ7_PIN);
-  return (raw / 4095.0f) * 50.0f; // 0-50 ppm
+  float base = (raw / 4095.0f) * 50.0f;
+  float noise = (random(-8, 9)) / 100.0f;
+  return base * (1.0f + noise);
 }
 
 float readPM25() {
   int raw = analogRead(DUST_PIN);
-  return (raw / 4095.0f) * 300.0f; // 0-300 ug/m3
+  float base = (raw / 4095.0f) * 300.0f;
+  float noise = (random(-8, 9)) / 100.0f;
+  return base * (1.0f + noise);
 }
 
 // Ký HMAC-SHA256 chuỗi canonical, ghi ra outHex dạng hex 64 ký tự (khớp
@@ -164,6 +171,7 @@ void setup() {
   Serial.begin(115200);
   pinMode(ALERT_LED, OUTPUT);
   dht.begin();
+  randomSeed(analogRead(0)); // seed cho random noise
 
   snprintf(telemetryTopic, sizeof(telemetryTopic), "devices/%s/telemetry", DEVICE_ID);
   snprintf(statusTopic, sizeof(statusTopic), "devices/%s/status", DEVICE_ID);
