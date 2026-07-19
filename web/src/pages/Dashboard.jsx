@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { api } from '../api/client.js';
 import SensorCard from '../components/SensorCard.jsx';
 import MultiDeviceChart from '../components/MultiDeviceChart.jsx';
+import DeviceDetailModal from '../components/DeviceDetailModal.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
   const [chartMetric, setChartMetric] = useState('co2_ppm');
+  const [modalDevice, setModalDevice] = useState(null);
 
   const loadDevices = useCallback(async () => {
     const { data } = await api.get('/devices');
@@ -127,7 +129,10 @@ export default function Dashboard() {
             <div
               key={device._id}
               className={`device-tile ${device._id === selectedDeviceId ? 'selected' : ''}`}
-              onClick={() => setSelectedDeviceId(device._id)}
+              onClick={() => {
+                setSelectedDeviceId(device._id);
+                setModalDevice(device);
+              }}
             >
               <div className="device-tile-header">
                 <strong>{device.name}</strong>
@@ -177,6 +182,8 @@ export default function Dashboard() {
           <MultiDeviceChart seriesByDevice={history} deviceNames={deviceNames} metric={chartMetric} />
         </div>
       )}
+
+      {modalDevice && <DeviceDetailModal device={modalDevice} onClose={() => setModalDevice(null)} />}
     </div>
   );
 }
