@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import Devices from './pages/Devices.jsx';
 import History from './pages/History.jsx';
 import Compare from './pages/Compare.jsx';
+import DebugTelemetry from './pages/DebugTelemetry.jsx';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -79,6 +80,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Compare />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/debug/telemetry"
+            element={
+              <ProtectedRoute>
+                <DebugTelemetry />
               </ProtectedRoute>
             }
           />
