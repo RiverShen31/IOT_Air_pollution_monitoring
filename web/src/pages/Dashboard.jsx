@@ -6,6 +6,26 @@ import MultiDeviceChart from '../components/MultiDeviceChart.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+function formatLastSeen(lastSeenAt) {
+  if (!lastSeenAt) return 'Chưa kết nối';
+
+  const now = Date.now();
+  const lastSeen = new Date(lastSeenAt).getTime();
+  const diff = now - lastSeen;
+
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return `${seconds}s trước`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m trước`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h trước`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d trước`;
+}
+
 const CHART_METRICS = [
   { key: 'co2_ppm', label: 'CO2 (ppm)' },
   { key: 'co_ppm', label: 'CO (ppm)' },
@@ -56,14 +76,21 @@ export default function Dashboard() {
         const list = prev[reading.deviceId] || [];
         return { ...prev, [reading.deviceId]: [...list.slice(-29), reading] };
       });
+      setDevices((prev) =>
+        prev.map((d) => (d.deviceId === reading.deviceId ? { ...d, lastSeenAt: new Date() } : d))
+      );
     });
 
     socket.on('alert:new', (alert) => {
       setAlerts((prev) => [alert, ...prev].slice(0, 10));
     });
 
-    socket.on('device:status', ({ deviceId, status }) => {
-      setDevices((prev) => prev.map((d) => (d.deviceId === deviceId ? { ...d, status } : d)));
+    socket.on('device:status', ({ deviceId, status, lastSeenAt }) => {
+      setDevices((prev) =>
+        prev.map((d) =>
+          d.deviceId === deviceId ? { ...d, status, lastSeenAt: lastSeenAt || d.lastSeenAt } : d
+        )
+      );
     });
 
     return () => socket.disconnect();
@@ -105,6 +132,9 @@ export default function Dashboard() {
               <div className="device-tile-header">
                 <strong>{device.name}</strong>
                 <span className={`status-dot ${device.status}`} title={device.status} />
+              </div>
+              <div className="last-seen">
+                Kết nối gần nhất: {formatLastSeen(device.lastSeenAt)}
               </div>
               {reading ? (
                 <>

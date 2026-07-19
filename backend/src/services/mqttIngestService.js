@@ -185,6 +185,7 @@ export function startMqttIngestService(mqttClient, io) {
         io.to(`user:${device.owner}`).emit('device:status', {
           deviceId: device.deviceId,
           status: device.status,
+          lastSeenAt: device.lastSeenAt,
         });
         return;
       }

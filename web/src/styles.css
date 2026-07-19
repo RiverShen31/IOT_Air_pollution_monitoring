@@ -94,6 +94,12 @@ body {
   margin-bottom: 8px;
 }
 
+.last-seen {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+
 .status-dot {
   width: 10px;
   height: 10px;
