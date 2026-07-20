@@ -21,23 +21,28 @@ function formatTime(ts) {
   return new Date(ts).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-// Smart Y-axis scaling: pad min/max by 10%
+// Smart Y-axis scaling: round to nearest intelligent multiple, min always 0
 function calculateAxisDomain(values, defaultRange) {
   const validValues = values.filter((v) => v != null && !isNaN(v));
-  if (validValues.length === 0) return defaultRange;
+  if (validValues.length === 0) return [0, defaultRange[1]];
 
-  const min = Math.min(...validValues);
   const max = Math.max(...validValues);
+  if (max === 0) return [0, 10]; // all values zero, use default
 
-  if (min === max) {
-    // If all values are the same, add 20% padding
-    const padding = Math.max(1, Math.abs(min) * 0.2);
-    return [Math.max(0, min - padding), max + padding];
-  }
+  // Choose step based on magnitude for clean axis labels
+  let step;
+  if (max <= 5) step = 1;
+  else if (max <= 10) step = 2;
+  else if (max <= 50) step = 5;
+  else if (max <= 100) step = 10;
+  else if (max <= 500) step = 25;
+  else if (max <= 1000) step = 50;
+  else step = 100;
 
-  const range = max - min;
-  const padding = range * 0.1;
-  return [Math.max(0, min - padding), max + padding];
+  // Round max up to nearest multiple of step
+  const roundedMax = Math.ceil(max / step) * step;
+
+  return [0, roundedMax];
 }
 
 export default function SingleDeviceChart({ data, metric }) {
