@@ -150,6 +150,22 @@ float readPM25() {
   return base * (1.0f + noise);
 }
 
+// Áp dụng tình trạng ô nhiễm theo deviceId (để demo ngưỡng cảnh báo)
+void applyPollutionScenario(float &co2, float &co, float &pm25) {
+  if (strcmp(DEVICE_ID, "AQ-DEVICE-WOKWI-01") == 0) {
+    // Hazardous (AQI > 300)
+    co2 = 15000.0f;
+    co = 40.0f;
+    pm25 = 350.0f;
+  } else if (strcmp(DEVICE_ID, "AQ-DEVICE-WOKWI-02") == 0) {
+    // Unhealthy (AQI 101-200)
+    co2 = 3000.0f;
+    co = 12.0f;
+    pm25 = 80.0f;
+  }
+  // AQ-DEVICE-WOKWI-03 giữ nguyên (Good)
+}
+
 // Ký HMAC-SHA256 chuỗi canonical, ghi ra outHex dạng hex 64 ký tự (khớp
 // crypto.createHmac('sha256', key).update(canonical).digest('hex') phía backend Node.js).
 void hmacSha256Hex(const char *key, const char *msg, char *outHex) {
@@ -194,6 +210,7 @@ void loop() {
     float co2 = readCO2ppm();
     float co = readCOppm();
     float pm25 = readPM25();
+    applyPollutionScenario(co2, co, pm25);
     float humidity = dht.readHumidity();
     float temperature = dht.readTemperature();
     if (isnan(humidity) || isnan(temperature)) {
