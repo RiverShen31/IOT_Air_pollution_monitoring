@@ -194,7 +194,11 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; font-
 .api-key-cell button { margin-left: 8px; }
 button.danger { background: #dc2626; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
 
-.history-controls { display: flex; gap: 24px; margin-bottom: 16px; }
+.history-controls { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.history-controls h2 { margin: 0 0 8px 0; }
+.controls-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+.controls-row label { display: flex; gap: 8px; align-items: center; }
+.controls-row select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
 
 .debug-controls {
   display: flex;

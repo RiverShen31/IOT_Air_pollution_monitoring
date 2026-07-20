@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { api } from '../api/client.js';
 import SensorCard from '../components/SensorCard.jsx';
-import MultiDeviceChart from '../components/MultiDeviceChart.jsx';
+import SingleDeviceChart from '../components/SingleDeviceChart.jsx';
 import DeviceDetailModal from '../components/DeviceDetailModal.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -167,19 +167,40 @@ export default function Dashboard() {
       {hasAnyHistory && (
         <div className="chart-section">
           <div className="history-controls">
-            <h2>Biểu đồ realtime — tất cả thiết bị</h2>
-            <label>
-              Chỉ số:
-              <select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
-                {CHART_METRICS.map((m) => (
-                  <option key={m.key} value={m.key}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <h2>Biểu đồ realtime</h2>
+            <div className="controls-row">
+              <label>
+                Thiết bị:
+                <select value={selectedDeviceId || ''} onChange={(e) => setSelectedDeviceId(e.target.value)}>
+                  <option value="">Chọn thiết bị...</option>
+                  {devices.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedDeviceId && (
+                <label>
+                  Chỉ số:
+                  <select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
+                    {CHART_METRICS.map((m) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
-          <MultiDeviceChart seriesByDevice={history} deviceNames={deviceNames} metric={chartMetric} />
+          {selectedDeviceId ? (
+            <SingleDeviceChart data={history[devices.find((d) => d._id === selectedDeviceId)?.deviceId] || []} metric={chartMetric} />
+          ) : (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+              Chọn một thiết bị từ danh sách để xem biểu đồ realtime
+            </div>
+          )}
         </div>
       )}
 
